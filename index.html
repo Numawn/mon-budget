@@ -667,7 +667,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="modal">
     <div class="modal-header"><h2>Scanner un ticket de caisse</h2><button class="modal-close" onclick="closeModal('modal-scan')">×</button></div>
     <div class="modal-body">
-      <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)">
+      <input type="file" id="file-input" accept="image/*" multiple onchange="handleMultiImageUpload(event)">
       <div class="scan-zone" onclick="document.getElementById('file-input').click()">
         <div class="icon">📷</div>
         <p>Cliquez pour choisir une photo de ticket</p>
@@ -904,6 +904,37 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
   </div>
 </div>
+
+
+<div class="modal-overlay" id="modal-confirm-ticket">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Confirmer le ticket détecté</h2>
+      <button class="modal-close" onclick="closeModal('modal-confirm-ticket')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Magasin</label>
+          <input type="text" id="confirm-ticket-shop">
+        </div>
+        <div class="form-field">
+          <label>Date du ticket</label>
+          <input type="date" id="confirm-ticket-date">
+        </div>
+      </div>
+      <div id="confirm-ticket-items"></div>
+      <div style="margin-top:12px;font-size:13px;color:var(--text2);">
+        Vérifiez les articles détectés. Vous pouvez corriger les noms, prix et supprimer les doublons avant l'enregistrement.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-confirm-ticket')">Annuler</button>
+      <button class="btn btn-accent" onclick="validateConfirmedTicket()">Valider le ticket</button>
+    </div>
+  </div>
+</div>
+
 
 <div class="toast" id="toast"></div>
 
@@ -1689,5 +1720,193 @@ function init(){
 }
 init();
 </script>
+
+<script>
+/* ===== Enhanced autosave + multi-photo receipt flow ===== */
+let pendingTicketData = null;
+let autosaveTimer = null;
+
+const originalSaveData = window.saveData;
+window.saveData = async function(){
+  try{
+    localStorage.setItem('budget-data-v2', JSON.stringify(data));
+  }catch(e){
+    console.error(e);
+  }
+
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(async ()=>{
+    if(googleToken){
+      try{
+        await saveToDrive();
+        const sync = document.getElementById('sync-status');
+        if(sync){
+          sync.textContent = 'Sauvegarde automatique Google Drive : ' + new Date().toLocaleTimeString('fr-BE');
+        }
+      }catch(err){
+        console.error(err);
+      }
+    }
+  }, 800);
+};
+
+function normalizeDetectedName(name){
+  return (name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9àâçéèêëîïôûùüÿñæœ]/gi,'')
+    .trim();
+}
+
+function deduplicateReceiptItems(items){
+  const map = new Map();
+
+  items.forEach(item=>{
+    const key = normalizeDetectedName(item.name) + '_' + Number(item.total || item.price || 0).toFixed(2);
+
+    if(!map.has(key)){
+      map.set(key, {
+        name: item.name || 'Article',
+        qty: item.qty || 1,
+        unit: item.unit || 'unité',
+        unitPrice: Number(item.unitPrice || item.total || 0),
+        total: Number(item.total || item.unitPrice || 0),
+        cat: item.cat || 'autre'
+      });
+    }
+  });
+
+  return [...map.values()];
+}
+
+async function handleMultiImageUpload(event){
+  const files = [...(event.target.files || [])];
+  if(!files.length){ return; }
+
+  document.getElementById('scan-loading').style.display = 'block';
+
+  try{
+    let mergedItems = [];
+    let detectedShop = 'Ticket multi-photos';
+    let detectedDate = new Date().toISOString().slice(0,10);
+
+    for(const file of files){
+      let partial = null;
+
+      if(typeof scanReceiptWithVision === 'function'){
+        try{
+          partial = await scanReceiptWithVision(file);
+        }catch(err){
+          console.warn('Vision scan failed', err);
+        }
+      }
+
+      if(partial && partial.items){
+        mergedItems.push(...partial.items);
+        if(partial.shop){ detectedShop = partial.shop; }
+        if(partial.date){ detectedDate = partial.date; }
+      }
+    }
+
+    if(!mergedItems.length){
+      mergedItems = files.map((f, idx)=>({
+        name:'Article à vérifier ' + (idx+1),
+        qty:1,
+        unit:'unité',
+        unitPrice:0,
+        total:0,
+        cat:'autre'
+      }));
+    }
+
+    mergedItems = deduplicateReceiptItems(mergedItems);
+
+    pendingTicketData = {
+      id: 't' + Date.now(),
+      shop: detectedShop,
+      date: detectedDate,
+      items: mergedItems,
+      total: mergedItems.reduce((s,i)=>s + Number(i.total || 0), 0)
+    };
+
+    renderTicketConfirmation();
+    closeModal('modal-scan');
+    openModal('modal-confirm-ticket');
+  } finally {
+    document.getElementById('scan-loading').style.display = 'none';
+    event.target.value = '';
+  }
+}
+
+function renderTicketConfirmation(){
+  if(!pendingTicketData){ return; }
+
+  document.getElementById('confirm-ticket-shop').value = pendingTicketData.shop || '';
+  document.getElementById('confirm-ticket-date').value = pendingTicketData.date || '';
+
+  const wrap = document.getElementById('confirm-ticket-items');
+
+  wrap.innerHTML = pendingTicketData.items.map((item, index)=>`
+    <div class="receipt-item" style="display:grid;grid-template-columns:1.8fr .7fr .7fr auto;gap:8px;padding:10px 0;">
+      <input data-field="name" data-index="${index}" value="${item.name}" style="border:1px solid var(--border-md);border-radius:6px;padding:6px;">
+      <input data-field="qty" data-index="${index}" type="number" step="0.01" value="${item.qty}" style="border:1px solid var(--border-md);border-radius:6px;padding:6px;">
+      <input data-field="total" data-index="${index}" type="number" step="0.01" value="${item.total}" style="border:1px solid var(--border-md);border-radius:6px;padding:6px;">
+      <button class="btn btn-sm btn-danger" onclick="removePendingItem(${index})">Suppr.</button>
+    </div>
+  `).join('');
+
+  wrap.querySelectorAll('input').forEach(input=>{
+    input.addEventListener('input', ()=>{
+      const idx = Number(input.dataset.index);
+      const field = input.dataset.field;
+      pendingTicketData.items[idx][field] = field === 'name' ? input.value : Number(input.value);
+    });
+  });
+}
+
+function removePendingItem(index){
+  pendingTicketData.items.splice(index,1);
+  renderTicketConfirmation();
+}
+
+function validateConfirmedTicket(){
+  if(!pendingTicketData){ return; }
+
+  pendingTicketData.shop = document.getElementById('confirm-ticket-shop').value || 'Ticket';
+  pendingTicketData.date = document.getElementById('confirm-ticket-date').value || new Date().toISOString().slice(0,10);
+  pendingTicketData.total = pendingTicketData.items.reduce((s,i)=>s + Number(i.total || 0),0);
+
+  data.tickets.unshift(pendingTicketData);
+
+  if(Array.isArray(data.articles)){
+    pendingTicketData.items.forEach(item=>{
+      data.articles.unshift({
+        id:'a'+Date.now()+Math.random().toString(36).slice(2,5),
+        name:item.name,
+        brand:'—',
+        shop:pendingTicketData.shop,
+        price:Number(item.total || 0),
+        qty:Number(item.qty || 1),
+        unit:item.unit || 'unité',
+        cat:item.cat || 'autre',
+        date:pendingTicketData.date,
+        type:'normal',
+        pricePerUnit:Number(item.total || 0) / Math.max(Number(item.qty || 1),1)
+      });
+    });
+  }
+
+  if(typeof saveData === 'function'){
+    saveData();
+  }
+
+  if(typeof renderCourses === 'function'){
+    renderCourses();
+  }
+
+  closeModal('modal-confirm-ticket');
+  showToast('Ticket enregistré et sauvegardé automatiquement.');
+}
+</script>
+
 </body>
 </html>
