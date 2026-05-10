@@ -1708,6 +1708,79 @@ function saveGoogleConfig(){
   showToast('Configuration sauvegardée ✓');
 }
 
+
+// ════════════════════════════════════════════
+// OCR MULTI-PHOTO AVANCÉ
+// ════════════════════════════════════════════
+
+let pendingReceiptData = null;
+
+function normalizeOCRText(str){
+  return (str || '')
+    .toLowerCase()
+    .replace(/[|]/g,'1')
+    .replace(/[€]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function cleanProductName(name){
+  return name
+    .replace(/^\d+[.,]?\d*\s*/,'')
+    .replace(/\bprix promotion\b/gi,'')
+    .replace(/\b-10%\b/gi,'')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+
+function isIgnoredLine(line){
+  const l = normalizeOCRText(line);
+
+  const ignored = [
+    'total',
+    'montant',
+    'paiement',
+    'bancontact',
+    'prix promotion',
+    'mode de paiement',
+    'tva',
+    '-10%',
+    'articles'
+  ];
+
+  return ignored.some(x=>l.includes(x));
+}
+
+function extractPrice(line){
+  const matches = [...line.matchAll(/(\d+[.,]\d{2})/g)];
+  if(!matches.length) return null;
+
+  const last = matches[matches.length-1][1];
+  return parseFloat(last.replace(',','.'));
+}
+
+function looksLikeProductLine(line){
+  const l = normalizeOCRText(line);
+
+  if(isIgnoredLine(l)) return false;
+
+  const hasLetters = /[a-zA-Z]/.test(l);
+  const hasPrice = /(\d+[.,]\d{2})/.test(l);
+
+  return hasLetters && hasPrice;
+}
+
+function deduplicateItems(items){
+  const map = new Map();
+
+  for(const item of items){
+    const key = normalizeOCRText(item.name)
+      .replace(/[^a-z0-9]/g,'')
+      .slice(0,25);
+
+    if(!map.has(key)){
+});
+
 // ════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════
