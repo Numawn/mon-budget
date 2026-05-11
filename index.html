@@ -264,6 +264,49 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* EDIT INLINE */
 .editable-balance{background:none;border:none;border-bottom:1px dashed var(--text3);font-family:'Fraunces',serif;font-size:22px;font-weight:300;width:130px;color:var(--text);outline:none;cursor:text;}
 .editable-balance:focus{border-color:var(--accent);}
+
+/* ACCOUNT GROUPS */
+.account-group-header{display:flex;align-items:center;justify-content:space-between;padding:12px 17px;border-bottom:1px solid var(--border);}
+.account-group-name{font-size:14px;font-weight:500;}
+.account-group-total{font-size:16px;font-family:'Fraunces',serif;font-weight:300;color:var(--accent);}
+.account-group-badge{font-size:10px;color:var(--text3);margin-left:6px;font-weight:400;}
+
+/* BALANCE HERO */
+.balance-hero{background:linear-gradient(135deg,var(--accent) 0%,#1A3D2B 100%);border-radius:var(--radius);padding:22px 26px;margin-bottom:14px;color:white;}
+.balance-hero-label{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.75;margin-bottom:6px;}
+.balance-hero-val{font-family:'Fraunces',serif;font-size:44px;font-weight:300;line-height:1;}
+.balance-hero-sub{font-size:12px;opacity:0.65;margin-top:4px;}
+.balance-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
+.balance-item{background:rgba(255,255,255,0.13);border-radius:var(--radius-sm);padding:9px 12px;}
+.balance-item-label{font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.06em;}
+.balance-item-val{font-size:18px;font-family:'Fraunces',serif;font-weight:300;margin-top:2px;}
+
+/* PENDING PANEL */
+.pending-panel{background:var(--warn-light);border:1px solid rgba(184,92,0,0.25);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;}
+.pending-panel-title{font-size:13px;font-weight:500;color:var(--warn);margin-bottom:8px;}
+.pending-item{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid rgba(184,92,0,0.13);font-size:13px;}
+.pending-item:last-child{border-bottom:none;}
+.pending-item-name{flex:1;color:var(--text);}
+
+/* SPLIT PAYMENT */
+.split-row{display:flex;align-items:center;gap:7px;margin-bottom:6px;font-size:13px;}
+.split-row select{flex:1;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;font-family:'DM Sans',sans-serif;background:var(--bg);}
+.split-row input[type=number]{width:85px;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:5px 8px;font-size:12px;font-family:'DM Sans',sans-serif;background:var(--bg);text-align:right;}
+
+/* PHOTO PREVIEW */
+.photo-thumbs{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;}
+.photo-thumb-wrap{position:relative;}
+.photo-thumb{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border-md);}
+.photo-del{position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--danger);color:white;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1;}
+
+/* DUPLICATE ALERT */
+.dup-alert{background:var(--warn-light);border:1.5px solid rgba(184,92,0,0.35);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;}
+.dup-alert-title{font-size:13px;font-weight:500;color:var(--warn);margin-bottom:7px;}
+
+/* CHARGE TAGS */
+.tag-auto{background:#E6F1FB;color:#185FA5;}
+.tag-manuel{background:var(--warn-light);color:var(--warn);}
+
 </style>
 </head>
 <body>
@@ -419,7 +462,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
   <div class="card">
     <div class="card-header"><h2>Mes comptes</h2></div>
-    <div class="account-grid" id="accounts-grid"></div>
+    <div id="account-groups-wrap"></div>
   </div>
 
   <div class="card">
@@ -464,7 +507,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="page-title">Courses & tickets</div>
       <div class="page-sub">Scannez vos tickets ou saisissez manuellement</div>
     </div>
-    <button class="btn btn-accent" onclick="openModal('modal-scan')">📷 Scanner un ticket</button>
+    <button class="btn btn-accent" onclick="openScanModal()">📷 Scanner un ticket</button>
   </div>
   <div class="two-col">
     <div>
@@ -478,8 +521,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </div>
         <div class="receipt-list" id="scan-items-list"></div>
         <div class="receipt-total"><span>Total ticket</span><span id="scan-total">—</span></div>
-        <div style="padding:10px 17px;">
-          <button class="btn btn-sm" onclick="openManualItemModal()">+ Ajouter un article manquant</button>
+        <div style="padding:10px 17px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+          <button class="btn btn-sm" onclick="addPendingItemRow()">+ Article</button>
+          <span style="font-size:12px;color:var(--text3);">Paiement :</span>
+          <div id="scan-payment-split" style="display:flex;flex-direction:column;gap:4px;flex:1;"></div>
+          <button class="btn btn-sm" onclick="addPaymentSplitRow()">+ Compte</button>
         </div>
       </div>
       <div class="card">
@@ -505,6 +551,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
     <button class="btn btn-accent" onclick="openModal('modal-add-article')">+ Ajouter</button>
   </div>
+  <div id="dup-alerts-wrap"></div>
   <div class="card">
     <div class="search-bar">
       <input type="text" placeholder="Rechercher..." id="article-search" oninput="renderArticles()">
@@ -667,7 +714,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="modal">
     <div class="modal-header"><h2>Scanner un ticket de caisse</h2><button class="modal-close" onclick="closeModal('modal-scan')">×</button></div>
     <div class="modal-body">
-      <input type="file" id="file-input" accept="image/*" multiple onchange="handleMultiImageUpload(event)">
+      <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)">
       <div class="scan-zone" onclick="document.getElementById('file-input').click()">
         <div class="icon">📷</div>
         <p>Cliquez pour choisir une photo de ticket</p>
@@ -717,6 +764,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           </select>
         </div>
         <div class="form-field"><label>Solde actuel (€)</label><input type="number" id="acc-balance" placeholder="0.00" step="0.01"></div>
+        <div class="form-field"><label>Groupe</label><select id="acc-group-id"><option value="">— Aucun —</option></select></div>
         <div class="form-field"><label>Couleur</label>
           <select id="acc-color">
             <option value="#2D6A4F">Vert</option>
@@ -823,12 +871,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option><option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option><option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
           </select>
         </div>
+        <div class="form-field" id="charge-day-wrap">
+          <label>Jour du mois <small style="color:var(--text3);">(optionnel)</small></label>
+          <input type="number" id="charge-day" placeholder="ex: 15" min="1" max="31">
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Laissez vide si vous ne connaissez pas encore la date exacte.</div>
+        </div>
+        <div class="form-field"><label>Paiement</label>
+          <select id="charge-pay-type">
+            <option value="auto">🤖 Automatique (prélevé seul)</option>
+            <option value="manuel">✋ Manuel (je dois payer)</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Compte lié</label><select id="charge-account-id"><option value="">— Aucun —</option></select></div>
         <div class="form-field form-full"><label>Notes</label><input type="text" id="charge-notes" placeholder="optionnel"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-add-charge')">Annuler</button>
-      <button class="btn btn-accent" onclick="addCharge()">Ajouter</button>
+      <button class="btn btn-accent" id="charge-save-btn" onclick="saveCharge()">Ajouter</button>
     </div>
   </div>
 </div>
@@ -906,35 +966,55 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </div>
 
 
-<div class="modal-overlay" id="modal-confirm-ticket">
+<!-- MANAGE GROUPS -->
+<div class="modal-overlay" id="modal-manage-groups">
   <div class="modal">
-    <div class="modal-header">
-      <h2>Confirmer le ticket détecté</h2>
-      <button class="modal-close" onclick="closeModal('modal-confirm-ticket')">×</button>
-    </div>
+    <div class="modal-header"><h2>Groupes de comptes</h2><button class="modal-close" onclick="closeModal('modal-manage-groups')">×</button></div>
     <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-field">
-          <label>Magasin</label>
-          <input type="text" id="confirm-ticket-shop">
-        </div>
-        <div class="form-field">
-          <label>Date du ticket</label>
-          <input type="date" id="confirm-ticket-date">
-        </div>
+      <div id="groups-list-edit"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <input type="text" id="new-group-name" placeholder="Nom du nouveau groupe" style="flex:1;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--bg);">
+        <button class="btn btn-accent" onclick="addGroup()">+ Créer</button>
       </div>
-      <div id="confirm-ticket-items"></div>
-      <div style="margin-top:12px;font-size:13px;color:var(--text2);">
-        Vérifiez les articles détectés. Vous pouvez corriger les noms, prix et supprimer les doublons avant l'enregistrement.
+      <div style="margin-top:10px;font-size:12px;color:var(--text3);">Le "total principal" sur le tableau de bord additionne uniquement les groupes cochés.</div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('modal-manage-groups');renderComptes();">Fermer</button></div>
+  </div>
+</div>
+
+<!-- PENDING INCOME CONFIRM -->
+<div class="modal-overlay" id="modal-pending-income">
+  <div class="modal">
+    <div class="modal-header"><h2 id="pend-inc-title">Rentrée à confirmer</h2><button class="modal-close" onclick="closeModal('modal-pending-income')">×</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;" id="pend-inc-desc"></p>
+      <div class="form-grid">
+        <div class="form-field form-full"><label>Montant réellement reçu (€)</label><input type="number" id="pend-inc-amount" step="0.01"></div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-confirm-ticket')">Annuler</button>
-      <button class="btn btn-accent" onclick="validateConfirmedTicket()">Valider le ticket</button>
+      <button class="btn" style="color:var(--warn);border-color:rgba(184,92,0,0.3);" onclick="markIncomeDelayed()">⏳ Pas encore reçu</button>
+      <button class="btn btn-accent" onclick="confirmIncomeReceived()">✓ Reçu — appliquer</button>
     </div>
   </div>
 </div>
 
+<!-- PENDING CHARGE CONFIRM -->
+<div class="modal-overlay" id="modal-pending-charge">
+  <div class="modal">
+    <div class="modal-header"><h2 id="pend-chg-title">Charge à payer</h2><button class="modal-close" onclick="closeModal('modal-pending-charge')">×</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;" id="pend-chg-desc"></p>
+      <div class="form-grid">
+        <div class="form-field form-full"><label>Montant payé (€)</label><input type="number" id="pend-chg-amount" step="0.01"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-pending-charge')">Annuler</button>
+      <button class="btn btn-accent" onclick="confirmChargePaid()">✓ Payé — déduire du compte</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -953,22 +1033,27 @@ const ACC_ICONS={banque:'🏦',epargne:'💰',prepaye:'💳','cheques-repas':'�
 // DATA
 // ════════════════════════════════════════════
 const DEFAULT_DATA = {
+  accountGroups:[
+    {id:'g1',name:'Comptes courants',includeInMain:true},
+    {id:'g2',name:'Épargne',includeInMain:false},
+    {id:'g3',name:'Chèques repas',includeInMain:false},
+  ],
   accounts: [
-    {id:'ac1',name:'BNP Principal',type:'banque',balance:0,color:'#185FA5',notes:'Compte courant principal',updatedAt:''},
-    {id:'ac2',name:'Wise',type:'banque',balance:0,color:'#2D6A4F',notes:'Charges voiture',updatedAt:''},
-    {id:'ac3',name:'Edenred',type:'cheques-repas',balance:0,color:'#B85C00',notes:'Chèques repas Luxembourg',updatedAt:''},
+    {id:'ac1',name:'BNP Principal',type:'banque',balance:0,color:'#185FA5',notes:'Compte courant principal',groupId:'g1',updatedAt:''},
+    {id:'ac2',name:'Wise',type:'banque',balance:0,color:'#2D6A4F',notes:'Charges voiture',groupId:'g1',updatedAt:''},
+    {id:'ac3',name:'Edenred',type:'cheques-repas',balance:0,color:'#B85C00',notes:'Chèques repas Luxembourg',groupId:'g3',updatedAt:''},
   ],
   incomes: [
-    {id:'i1',name:'Salaire',amount:0,freq:'mensuel',notes:'Variable, mettre à jour chaque mois'},
-    {id:'i2',name:'Chèques repas Edenred',amount:0,freq:'mensuel',notes:''},
+    {id:'i1',name:'Salaire',amount:0,freq:'mensuel',day:25,accountId:'ac1',notes:'Variable, mettre à jour chaque mois'},
+    {id:'i2',name:'Chèques repas Edenred',amount:0,freq:'mensuel',day:1,accountId:'ac3',notes:''},
   ],
   ponctuals: [],
   charges: [
-    {id:'c1',name:'Assurance voiture',cat:'voiture',freq:'annuel',amount:812.9,month:1,notes:''},
-    {id:'c2',name:'Taxe de circulation',cat:'voiture',freq:'annuel',amount:169.32,month:3,notes:''},
-    {id:'c3',name:'Pneus (été + hiver)',cat:'voiture',freq:'annuel',amount:315,month:4,notes:''},
-    {id:'c4',name:'Entretien voiture',cat:'voiture',freq:'annuel',amount:150,month:6,notes:'estimation'},
-    {id:'c5',name:'Abonnement téléphone',cat:'informatique',freq:'mensuel',amount:15,month:null,notes:''},
+    {id:'c1',name:'Assurance voiture',cat:'voiture',freq:'annuel',amount:812.9,month:1,day:null,payType:'auto',accountId:'ac2',notes:''},
+    {id:'c2',name:'Taxe de circulation',cat:'voiture',freq:'annuel',amount:169.32,month:3,day:null,payType:'manuel',accountId:'ac2',notes:''},
+    {id:'c3',name:'Pneus (été + hiver)',cat:'voiture',freq:'annuel',amount:315,month:4,day:null,payType:'manuel',accountId:'ac2',notes:''},
+    {id:'c4',name:'Entretien voiture',cat:'voiture',freq:'annuel',amount:150,month:6,day:null,payType:'manuel',accountId:'ac2',notes:'estimation'},
+    {id:'c5',name:'Abonnement téléphone',cat:'informatique',freq:'mensuel',amount:15,month:null,day:1,payType:'auto',accountId:'ac1',notes:''},
   ],
   tickets: [
     {id:'t1',date:'2026-05-09',shop:'La GroCerie Massen',total:39.01,items:[
@@ -999,12 +1084,20 @@ const DEFAULT_DATA = {
   currentYear: new Date().getFullYear(),
   googleClientId: '',
   googleVisionKey: '',
+  pendingTransactions:[],
+  lastOpenedAt:null,
+  dismissedDuplicates:[],
 };
 
 let data = JSON.parse(JSON.stringify(DEFAULT_DATA));
 let googleToken = null;
 let driveFileId = null;
 let _updateBalanceAccountId = null;
+let _editingIncomeId = null;
+let _editingChargeId = null;
+let _pendingTxId = null;
+let _pendingPhotos = []; // {file, url, b64}
+let _saveTimer = null;
 
 // ════════════════════════════════════════════
 // UTILS
@@ -1046,7 +1139,11 @@ function chargeMonthly(c){
   return 0;
 }
 function totalChargesMonthly(){return data.charges.reduce((s,c)=>s+chargeMonthly(c),0);}
-function totalAssets(){return data.accounts.reduce((s,a)=>s+(a.balance||0),0);}
+function totalAssets(groupIds){
+  const accs=groupIds?data.accounts.filter(a=>groupIds.includes(a.groupId)):data.accounts;
+  return accs.reduce((s,a)=>s+(a.balance||0),0);
+}
+function mainGroupIds(){return(data.accountGroups||[]).filter(g=>g.includeInMain).map(g=>g.id);}
 function incomeMonthly(inc){
   if(inc.freq==='mensuel')return inc.amount;
   if(inc.freq==='hebdo')return inc.amount*4.33;
@@ -1061,8 +1158,25 @@ function ticketsCatTotal(tickets){const cats={};tickets.forEach(t=>t.items.forEa
 function getUpcoming(){
   const now=new Date();const res=[];
   data.charges.forEach(c=>{
-    if(c.freq==='annuel'&&c.month){let d=new Date(now.getFullYear(),c.month-1,1);if(d<now)d.setFullYear(d.getFullYear()+1);const days=Math.round((d-now)/86400000);if(days<=90)res.push({...c,days,payDate:d});}
-    if(c.freq==='trimestriel'){const q=Math.floor(now.getMonth()/3);const d=new Date(now.getFullYear(),(q+1)*3,1);const days=Math.round((d-now)/86400000);if(days<=60)res.push({...c,days,payDate:d});}
+    if(c.freq==='annuel'&&c.month){
+      const dy=c.day||1;
+      let d=new Date(now.getFullYear(),c.month-1,dy);
+      if(d<now)d.setFullYear(d.getFullYear()+1);
+      const days=Math.round((d-now)/86400000);
+      if(days<=90)res.push({...c,days,payDate:d});
+    }
+    if(c.freq==='trimestriel'){
+      const q=Math.floor(now.getMonth()/3);
+      const d=new Date(now.getFullYear(),(q+1)*3,c.day||1);
+      const days=Math.round((d-now)/86400000);
+      if(days<=60)res.push({...c,days,payDate:d});
+    }
+    if(c.freq==='mensuel'&&c.day){
+      let d=new Date(now.getFullYear(),now.getMonth(),c.day);
+      if(d<=now)d=new Date(now.getFullYear(),now.getMonth()+1,c.day);
+      const days=Math.round((d-now)/86400000);
+      if(days<=14)res.push({...c,days,payDate:d});
+    }
   });
   return res.sort((a,b)=>a.days-b.days);
 }
@@ -1094,8 +1208,11 @@ function renderDashboard(){
   const assets=totalAssets();
   const madeAside=data.charges.filter(c=>c.freq==='annuel').reduce((s,c)=>s+chargeMonthly(c),0);
 
-  document.getElementById('hero-total').textContent=fmt(assets);
-  document.getElementById('hero-sub').textContent='Somme de tous vos comptes';
+  renderPendingPanel();
+  const mIds=mainGroupIds();
+  const mainAssets=totalAssets(mIds.length?mIds:null);
+  document.getElementById('hero-total').textContent=fmt(mainAssets);
+  document.getElementById('hero-sub').textContent='Total général tous comptes : '+fmt(totalAssets());
   document.getElementById('hero-income').textContent=fmt(allIncome);
   document.getElementById('hero-expenses').textContent=fmt(allExpenses);
   document.getElementById('hero-balance').textContent=(monthBalance>=0?'+':'')+fmt(monthBalance);
@@ -1145,14 +1262,22 @@ function renderDashboard(){
       <div style="flex:1;"><div style="font-weight:500;">${t.shop}</div><div style="font-size:11px;color:var(--text3);">${new Date(t.date).toLocaleDateString('fr-BE')}</div></div>
       <div style="font-weight:500;">${fmt(t.total)}</div></div>`).join('');
 
-  // accounts in dash
-  const da=document.getElementById('dash-accounts');
-  da.innerHTML=data.accounts.map(a=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 17px;border-bottom:1px solid var(--border);font-size:13px;">
-      <div style="width:28px;height:28px;border-radius:50%;background:${a.color}22;display:flex;align-items:center;justify-content:center;font-size:13px;">${ACC_ICONS[a.type]||'💳'}</div>
-      <div style="flex:1;"><div style="font-weight:500;">${a.name}</div><div style="font-size:11px;color:var(--text3);">${a.notes||''}</div></div>
-      <div style="font-weight:500;color:${a.color};">${fmt(a.balance)}</div>
-    </div>`).join('');
+  // Account groups in dashboard
+  const dg=document.getElementById('dash-accounts');
+  if(dg){
+    const grps=data.accountGroups||[];
+    dg.innerHTML=grps.map(g=>{
+      const accs=data.accounts.filter(a=>a.groupId===g.id);
+      if(!accs.length)return'';
+      const gTot=accs.reduce((s,a)=>s+(a.balance||0),0);
+      return`<div style="border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;padding:8px 17px;background:var(--surface2);font-size:12px;"><span style="font-weight:500;">${g.name}</span><span style="color:var(--accent);font-weight:500;">${fmt(gTot)}</span></div>`+
+      accs.map(a=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 17px 9px 27px;border-top:1px solid var(--border);font-size:13px;">
+        <div style="width:24px;height:24px;border-radius:50%;background:${a.color}22;display:flex;align-items:center;justify-content:center;font-size:12px;">${ACC_ICONS[a.type]||'💳'}</div>
+        <div style="flex:1;"><div style="font-weight:500;">${a.name}</div></div>
+        <div style="font-weight:500;color:${a.color};">${fmt(a.balance)}</div>
+      </div>`).join('')+'</div>';
+    }).join('');
+  }
 
   // price alerts
   const pa=document.getElementById('price-alerts');
@@ -1166,7 +1291,8 @@ function renderDashboard(){
   uc.innerHTML=upcoming.length===0?'<div style="padding:13px 17px;color:var(--text3);font-size:13px;">Aucune échéance proche</div>':
     upcoming.map(u=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 17px;border-bottom:1px solid var(--border);font-size:13px;">
       <div style="width:34px;height:34px;border-radius:50%;background:${u.days<=30?'var(--warn-light)':'var(--surface2)'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:${u.days<=30?'var(--warn)':'var(--text2)'};">${u.days}j</div>
-      <div style="flex:1;"><div style="font-weight:500;">${u.name}</div><div style="font-size:11px;color:var(--text3);">${u.payDate.toLocaleDateString('fr-BE')}</div></div>
+      <div style="flex:1;"><div style="font-weight:500;">${u.name}</div>
+        <div style="font-size:11px;color:var(--text3);">${u.payDate.toLocaleDateString('fr-BE')} · <span class="tag ${u.payType==='auto'?'tag-auto':'tag-manuel'}">${u.payType==='auto'?'Auto':'Manuel'}</span></div></div>
       <div style="font-weight:500;">${fmt(u.amount)}</div></div>`).join('');
 }
 
@@ -1174,8 +1300,10 @@ function renderDashboard(){
 // COMPTES
 // ════════════════════════════════════════════
 function renderComptes(){
+  renderComptesGroups();
+  // legacy grid kept for compatibility (hidden by account-groups-wrap replacing it)
   const grid=document.getElementById('accounts-grid');
-  grid.innerHTML=data.accounts.map(a=>`
+  if(grid)grid.innerHTML=data.accounts.map(a=>`
     <div class="account-card" style="border-top:3px solid ${a.color};">
       <div class="account-card-top">
         <div style="width:34px;height:34px;border-radius:50%;background:${a.color}22;display:flex;align-items:center;justify-content:center;font-size:17px;">${ACC_ICONS[a.type]||'💳'}</div>
@@ -1189,26 +1317,26 @@ function renderComptes(){
       <div class="account-balance" style="color:${a.color};margin-top:8px;">${fmt(a.balance)}</div>
       ${a.updatedAt?`<div class="account-updated">Mis à jour le ${new Date(a.updatedAt).toLocaleDateString('fr-BE')}</div>`:''}
     </div>`).join('');
-
-  // total
-  const total=totalAssets();
-  // incomes
+  }
   renderIncomes();
 }
 
 function renderIncomes(){
   const el=document.getElementById('income-list');
   el.innerHTML=data.incomes.length===0?'<div style="padding:14px 17px;color:var(--text3);font-size:13px;">Aucune rentrée configurée</div>':
-    data.incomes.map(i=>`
-    <div class="income-row">
-      <div class="income-icon" style="background:var(--accent-light);">💚</div>
-      <div style="flex:1;">
-        <div class="income-name">${i.name}</div>
-        <div class="income-freq">${FREQ_LABEL[i.freq]||i.freq}${i.notes?' · '+i.notes:''}</div>
-      </div>
-      <div class="income-amount">${fmt(i.amount)}</div>
-      <span class="income-delete" onclick="deleteIncome('${i.id}')">×</span>
-    </div>`).join('');
+    data.incomes.map(i=>{
+      const acc=data.accounts.find(a=>a.id===i.accountId);
+      return`<div class="income-row">
+        <div class="income-icon" style="background:var(--accent-light);">💚</div>
+        <div style="flex:1;">
+          <div class="income-name">${i.name}</div>
+          <div class="income-freq">${FREQ_LABEL[i.freq]||i.freq}${i.day?' · Jour '+i.day:''}${acc?' · →'+acc.name:''}${i.notes?' · '+i.notes:''}</div>
+        </div>
+        <div class="income-amount">${fmt(i.amount)}</div>
+        <button class="btn btn-sm" onclick="openEditIncome('${i.id}')" style="margin-left:5px;">✎</button>
+        <span class="income-delete" onclick="deleteIncome('${i.id}')">×</span>
+      </div>`;
+    }).join('');
   const total=totalIncomeMonthly();
   document.getElementById('income-total-label').textContent=fmt(total)+'/mois';
 
@@ -1244,17 +1372,12 @@ function addAccount(){
   const name=document.getElementById('acc-name').value.trim();
   const balance=parseFloat(document.getElementById('acc-balance').value)||0;
   if(!name){showToast('Donnez un nom au compte');return;}
-  data.accounts.push({id:uid(),name,type:document.getElementById('acc-type').value,balance,color:document.getElementById('acc-color').value,notes:document.getElementById('acc-notes').value,updatedAt:new Date().toISOString()});
+  data.accounts.push({id:uid(),name,type:document.getElementById('acc-type').value,balance,color:document.getElementById('acc-color').value,groupId:document.getElementById('acc-group-id')?.value||null,notes:document.getElementById('acc-notes').value,updatedAt:new Date().toISOString()});
   closeModal('modal-add-account');renderComptes();saveData();showToast('Compte ajouté ✓');
 }
 function deleteAccount(id){data.accounts=data.accounts.filter(a=>a.id!==id);renderComptes();saveData();}
-function addIncome(){
-  const name=document.getElementById('inc-name').value.trim();
-  const amount=parseFloat(document.getElementById('inc-amount').value)||0;
-  if(!name){showToast('Donnez un nom à la rentrée');return;}
-  data.incomes.push({id:uid(),name,amount,freq:document.getElementById('inc-freq').value,notes:document.getElementById('inc-notes').value});
-  closeModal('modal-add-income');renderIncomes();saveData();showToast('Rentrée ajoutée ✓');
-}
+// addIncome replaced by saveIncome()
+function addIncome(){saveIncome();}
 function deleteIncome(id){data.incomes=data.incomes.filter(i=>i.id!==id);renderIncomes();saveData();}
 function addPonctual(){
   const name=document.getElementById('ponc-name').value.trim();
@@ -1286,29 +1409,28 @@ function renderCharges(){
         <span class="cat-chevron" id="chev-${cid}">›</span>
       </div>
       <div id="${cid}" style="display:none;" class="sub-rows">
-        ${charges.map(c=>`<div class="sub-row">
-          <span class="sub-name">${c.name}</span>
-          <span class="tag ${FREQ_TAG[c.freq]||''}">${FREQ_LABEL[c.freq]||c.freq}</span>
-          ${c.freq!=='mensuel'?`<span style="color:var(--text3);font-size:11px;">${fmt(c.amount)} total</span>`:''}
-          <div style="text-align:right;flex-shrink:0;">
-            <div style="font-size:13px;font-weight:500;">${fmt(chargeMonthly(c))}<span style="font-size:10px;color:var(--text3);">/m</span></div>
-            ${c.month?`<div style="font-size:10px;color:var(--text3);">payé en ${MONTHS[c.month-1].toLowerCase()}</div>`:''}
-          </div>
-          <span onclick="deleteCharge('${c.id}')" style="color:var(--text3);cursor:pointer;font-size:15px;padding:0 3px;">×</span>
-        </div>`).join('')}
+        ${charges.map(c=>{
+          const acc=data.accounts.find(a=>a.id===c.accountId);
+          return`<div class="sub-row">
+            <span class="sub-name">${c.name}</span>
+            <span class="tag ${c.payType==='auto'?'tag-auto':'tag-manuel'}">${c.payType==='auto'?'Auto':'Manuel'}</span>
+            <span class="tag ${FREQ_TAG[c.freq]||''}">${FREQ_LABEL[c.freq]||c.freq}</span>
+            ${c.freq!=='mensuel'?`<span style="color:var(--text3);font-size:11px;">${fmt(c.amount)}</span>`:''}
+            <div style="text-align:right;flex-shrink:0;margin-left:auto;">
+              <div style="font-size:13px;font-weight:500;">${fmt(chargeMonthly(c))}<span style="font-size:10px;color:var(--text3);">/m</span></div>
+              <div style="font-size:10px;color:var(--text3);">${c.month?MONTHS[c.month-1].toLowerCase():''}${c.day?' j.'+c.day:''}${acc?' · '+acc.name:''}</div>
+            </div>
+            <button class="btn btn-sm" onclick="openEditCharge('${c.id}');event.stopPropagation();" style="margin-left:4px;">✎</button>
+            <span onclick="deleteCharge('${c.id}');event.stopPropagation();" style="color:var(--text3);cursor:pointer;font-size:15px;padding:0 3px;">×</span>
+          </div>`;
+        }).join('')}
       </div>`;
   });
   document.getElementById('charges-total').textContent=fmt(totalChargesMonthly());
 }
 function toggleCat(id){const el=document.getElementById(id);const chev=document.getElementById('chev-'+id);const open=el.style.display!=='none';el.style.display=open?'none':'block';chev.classList.toggle('open',!open);}
-function addCharge(){
-  const name=document.getElementById('charge-name').value.trim();
-  const amount=parseFloat(document.getElementById('charge-amount').value);
-  if(!name||isNaN(amount)){showToast('Remplissez le nom et le montant');return;}
-  const freq=document.getElementById('charge-freq').value;
-  data.charges.push({id:uid(),name,cat:document.getElementById('charge-cat').value,freq,amount,month:freq==='mensuel'?null:parseInt(document.getElementById('charge-month').value),notes:document.getElementById('charge-notes').value});
-  closeModal('modal-add-charge');renderCharges();saveData();showToast('Charge ajoutée ✓');
-}
+// addCharge replaced by saveCharge() which handles both add and edit
+function addCharge(){saveCharge();}
 function deleteCharge(id){data.charges=data.charges.filter(c=>c.id!==id);renderCharges();saveData();}
 
 // ════════════════════════════════════════════
@@ -1402,6 +1524,8 @@ function displayScanResults(ticket){
   document.getElementById('scan-date-label').textContent=ticket.date||'';
   document.getElementById('scan-total').textContent=fmt(ticket.total||0);
   window._pendingTicket=ticket;
+  if(!ticket.payments)ticket.payments=[{accountId:data.accounts[0]?.id||'',amount:ticket.total||0}];
+  renderPaymentSplits();
   const el=document.getElementById('scan-items-list');
   el.innerHTML=ticket.items.map((item,i)=>`
     <div class="receipt-item">
@@ -1450,8 +1574,9 @@ function saveManualTicket(){
   const total=parseFloat(document.getElementById('mt-total').value)||items.reduce((s,i)=>s+i.total,0);
   const ticket={id:uid(),date,shop,total,items};
   data.tickets.push(ticket);
-  addTicketArticlesToHistory(ticket);
+  addTicketToHistory(ticket);
   closeModal('modal-manual-ticket');renderCourses();saveData();showToast('Ticket enregistré ✓');
+  setTimeout(()=>renderDupAlerts(),500);
 }
 function saveTicket(){
   const ticket=window._pendingTicket;if(!ticket)return;
@@ -1474,6 +1599,7 @@ function addTicketArticlesToHistory(ticket){
 // ARTICLES
 // ════════════════════════════════════════════
 function renderArticles(){
+  renderDupAlerts();
   const search=(document.getElementById('article-search')?.value||'').toLowerCase();
   const catFilter=document.getElementById('article-cat-filter')?.value||'';
   const filter=data.articleFilter||'all';
@@ -1708,79 +1834,6 @@ function saveGoogleConfig(){
   showToast('Configuration sauvegardée ✓');
 }
 
-
-// ════════════════════════════════════════════
-// OCR MULTI-PHOTO AVANCÉ
-// ════════════════════════════════════════════
-
-let pendingReceiptData = null;
-
-function normalizeOCRText(str){
-  return (str || '')
-    .toLowerCase()
-    .replace(/[|]/g,'1')
-    .replace(/[€]/g,'')
-    .replace(/\s+/g,' ')
-    .trim();
-}
-
-function cleanProductName(name){
-  return name
-    .replace(/^\d+[.,]?\d*\s*/,'')
-    .replace(/\bprix promotion\b/gi,'')
-    .replace(/\b-10%\b/gi,'')
-    .replace(/\s{2,}/g,' ')
-    .trim();
-}
-
-function isIgnoredLine(line){
-  const l = normalizeOCRText(line);
-
-  const ignored = [
-    'total',
-    'montant',
-    'paiement',
-    'bancontact',
-    'prix promotion',
-    'mode de paiement',
-    'tva',
-    '-10%',
-    'articles'
-  ];
-
-  return ignored.some(x=>l.includes(x));
-}
-
-function extractPrice(line){
-  const matches = [...line.matchAll(/(\d+[.,]\d{2})/g)];
-  if(!matches.length) return null;
-
-  const last = matches[matches.length-1][1];
-  return parseFloat(last.replace(',','.'));
-}
-
-function looksLikeProductLine(line){
-  const l = normalizeOCRText(line);
-
-  if(isIgnoredLine(l)) return false;
-
-  const hasLetters = /[a-zA-Z]/.test(l);
-  const hasPrice = /(\d+[.,]\d{2})/.test(l);
-
-  return hasLetters && hasPrice;
-}
-
-function deduplicateItems(items){
-  const map = new Map();
-
-  for(const item of items){
-    const key = normalizeOCRText(item.name)
-      .replace(/[^a-z0-9]/g,'')
-      .slice(0,25);
-
-    if(!map.has(key)){
-});
-
 // ════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════
@@ -1792,194 +1845,495 @@ function init(){
   renderDashboard();
 }
 init();
-</script>
 
-<script>
-/* ===== Enhanced autosave + multi-photo receipt flow ===== */
-let pendingTicketData = null;
-let autosaveTimer = null;
 
-const originalSaveData = window.saveData;
-window.saveData = async function(){
-  try{
-    localStorage.setItem('budget-data-v2', JSON.stringify(data));
-  }catch(e){
-    console.error(e);
-  }
+// ════════════════════════════════════════════
+// PENDING TRANSACTIONS (auto-processing)
+// ════════════════════════════════════════════
+function processAutoTransactions(){
+  const now=new Date();
+  const last=data.lastOpenedAt?new Date(data.lastOpenedAt):null;
+  data.lastOpenedAt=now.toISOString();
+  if(!last)return;
+  if(!data.pendingTransactions)data.pendingTransactions=[];
+  const pt=data.pendingTransactions;
 
-  clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(async ()=>{
-    if(googleToken){
-      try{
-        await saveToDrive();
-        const sync = document.getElementById('sync-status');
-        if(sync){
-          sync.textContent = 'Sauvegarde automatique Google Drive : ' + new Date().toLocaleTimeString('fr-BE');
+  // Incomes with day configured
+  data.incomes.forEach(inc=>{
+    if(!inc.day)return;
+    let check=new Date(last);
+    for(let safety=0;safety<25;safety++){
+      const d=new Date(check.getFullYear(),check.getMonth(),inc.day);
+      if(d>last&&d<=now){
+        const key=inc.id+'_'+d.toISOString().slice(0,7);
+        if(!pt.find(p=>p.key===key)){
+          pt.push({id:uid(),key,type:'income',sourceId:inc.id,name:inc.name,
+            amount:inc.amount,accountId:inc.accountId,
+            date:d.toISOString().split('T')[0],status:'pending'});
         }
-      }catch(err){
-        console.error(err);
       }
-    }
-  }, 800);
-};
-
-function normalizeDetectedName(name){
-  return (name || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9àâçéèêëîïôûùüÿñæœ]/gi,'')
-    .trim();
-}
-
-function deduplicateReceiptItems(items){
-  const map = new Map();
-
-  items.forEach(item=>{
-    const key = normalizeDetectedName(item.name) + '_' + Number(item.total || item.price || 0).toFixed(2);
-
-    if(!map.has(key)){
-      map.set(key, {
-        name: item.name || 'Article',
-        qty: item.qty || 1,
-        unit: item.unit || 'unité',
-        unitPrice: Number(item.unitPrice || item.total || 0),
-        total: Number(item.total || item.unitPrice || 0),
-        cat: item.cat || 'autre'
-      });
+      check=new Date(check.getFullYear(),check.getMonth()+1,1);
+      if(check>new Date(now.getFullYear(),now.getMonth()+1,1))break;
     }
   });
 
-  return [...map.values()];
-}
-
-async function handleMultiImageUpload(event){
-  const files = [...(event.target.files || [])];
-  if(!files.length){ return; }
-
-  document.getElementById('scan-loading').style.display = 'block';
-
-  try{
-    let mergedItems = [];
-    let detectedShop = 'Ticket multi-photos';
-    let detectedDate = new Date().toISOString().slice(0,10);
-
-    for(const file of files){
-      let partial = null;
-
-      if(typeof scanReceiptWithVision === 'function'){
-        try{
-          partial = await scanReceiptWithVision(file);
-        }catch(err){
-          console.warn('Vision scan failed', err);
+  // Charges with day configured
+  data.charges.forEach(c=>{
+    if(!c.day)return;
+    let check=new Date(last);
+    for(let safety=0;safety<25;safety++){
+      let d=null;
+      if(c.freq==='mensuel') d=new Date(check.getFullYear(),check.getMonth(),c.day);
+      else if(c.freq==='annuel'&&c.month) d=new Date(check.getFullYear(),c.month-1,c.day);
+      else if(c.freq==='trimestriel'){const qm=Math.floor(check.getMonth()/3)*3;d=new Date(check.getFullYear(),qm+3,c.day);}
+      if(d&&d>last&&d<=now){
+        const key=c.id+'_'+d.toISOString().slice(0,10);
+        if(!pt.find(p=>p.key===key)){
+          if(c.payType==='auto'){
+            const acc=data.accounts.find(a=>a.id===c.accountId);
+            if(acc){acc.balance-=c.amount;acc.updatedAt=now.toISOString();}
+            pt.push({id:uid(),key,type:'charge',sourceId:c.id,name:c.name,
+              amount:c.amount,accountId:c.accountId,
+              date:d.toISOString().split('T')[0],status:'auto_applied'});
+            showToast('Charge auto appliquée : '+c.name);
+          } else {
+            pt.push({id:uid(),key,type:'charge',sourceId:c.id,name:c.name,
+              amount:c.amount,accountId:c.accountId,
+              date:d.toISOString().split('T')[0],status:'pending'});
+          }
         }
       }
-
-      if(partial && partial.items){
-        mergedItems.push(...partial.items);
-        if(partial.shop){ detectedShop = partial.shop; }
-        if(partial.date){ detectedDate = partial.date; }
-      }
+      check=new Date(check.getFullYear(),check.getMonth()+1,1);
+      if(check>new Date(now.getFullYear(),now.getMonth()+1,1))break;
     }
+  });
+  saveData();
+}
 
-    if(!mergedItems.length){
-      mergedItems = files.map((f, idx)=>({
-        name:'Article à vérifier ' + (idx+1),
-        qty:1,
-        unit:'unité',
-        unitPrice:0,
-        total:0,
-        cat:'autre'
-      }));
-    }
+function renderPendingPanel(){
+  const wrap=document.getElementById('pending-panel-wrap');if(!wrap)return;
+  const pending=(data.pendingTransactions||[]).filter(t=>t.status==='pending');
+  if(!pending.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=`<div class="pending-panel">
+    <div class="pending-panel-title">⏳ ${pending.length} transaction(s) à confirmer</div>
+    ${pending.map(t=>`<div class="pending-item">
+      <div style="width:26px;height:26px;border-radius:50%;background:${t.type==='income'?'var(--accent-light)':'var(--danger-light)'};display:flex;align-items:center;justify-content:center;font-size:12px;">${t.type==='income'?'💚':'💸'}</div>
+      <div class="pending-item-name"><div style="font-weight:500;">${t.name}</div><div style="font-size:11px;color:var(--text3);">${new Date(t.date).toLocaleDateString('fr-BE')}${t.type==='charge'?' · Manuel':''}</div></div>
+      <div style="font-weight:500;color:${t.type==='income'?'var(--accent)':'var(--danger)'};">${t.type==='income'?'+':'−'}${fmt(t.amount)}</div>
+      <button class="btn btn-sm ${t.type==='income'?'btn-accent':''}" onclick="openPendingConfirm('${t.id}')">${t.type==='income'?'Reçu ?':'Payé ?'}</button>
+      <button class="btn btn-sm" onclick="dismissPendingTx('${t.id}')" title="Reporter">⏸</button>
+    </div>`).join('')}
+  </div>`;
+}
 
-    mergedItems = deduplicateReceiptItems(mergedItems);
+let _pendingTxId=null;
+function openPendingConfirm(id){
+  _pendingTxId=id;
+  const tx=(data.pendingTransactions||[]).find(t=>t.id===id);if(!tx)return;
+  if(tx.type==='income'){
+    document.getElementById('pend-inc-title').textContent='Rentrée : '+tx.name;
+    document.getElementById('pend-inc-desc').textContent='Attendue le '+new Date(tx.date).toLocaleDateString('fr-BE')+'. Confirmez le montant reçu :';
+    document.getElementById('pend-inc-amount').value=tx.amount;
+    openModal('modal-pending-income');
+  } else {
+    document.getElementById('pend-chg-title').textContent='Charge : '+tx.name;
+    document.getElementById('pend-chg-desc').textContent='Prévue le '+new Date(tx.date).toLocaleDateString('fr-BE')+'. Confirmez le montant payé :';
+    document.getElementById('pend-chg-amount').value=tx.amount;
+    openModal('modal-pending-charge');
+  }
+}
+function confirmIncomeReceived(){
+  const tx=(data.pendingTransactions||[]).find(t=>t.id===_pendingTxId);if(!tx)return;
+  const amount=parseFloat(document.getElementById('pend-inc-amount').value)||tx.amount;
+  const acc=data.accounts.find(a=>a.id===tx.accountId);
+  if(acc){acc.balance+=amount;acc.updatedAt=new Date().toISOString();}
+  tx.status='done';tx.actualAmount=amount;
+  closeModal('modal-pending-income');renderDashboard();saveData();showToast('Rentrée confirmée +'+fmt(amount));
+}
+function markIncomeDelayed(){
+  const tx=(data.pendingTransactions||[]).find(t=>t.id===_pendingTxId);
+  if(tx){tx.status='delayed';}
+  closeModal('modal-pending-income');renderDashboard();saveData();showToast('Rentrée marquée "pas encore reçue"');
+}
+function confirmChargePaid(){
+  const tx=(data.pendingTransactions||[]).find(t=>t.id===_pendingTxId);if(!tx)return;
+  const amount=parseFloat(document.getElementById('pend-chg-amount').value)||tx.amount;
+  const acc=data.accounts.find(a=>a.id===tx.accountId);
+  if(acc){acc.balance-=amount;acc.updatedAt=new Date().toISOString();}
+  tx.status='done';tx.actualAmount=amount;
+  closeModal('modal-pending-charge');renderDashboard();saveData();showToast('Charge payée −'+fmt(amount));
+}
+function dismissPendingTx(id){
+  const tx=(data.pendingTransactions||[]).find(t=>t.id===id);
+  if(tx)tx.status='delayed';
+  renderDashboard();saveData();
+}
 
-    pendingTicketData = {
-      id: 't' + Date.now(),
-      shop: detectedShop,
-      date: detectedDate,
-      items: mergedItems,
-      total: mergedItems.reduce((s,i)=>s + Number(i.total || 0), 0)
-    };
+// ════════════════════════════════════════════
+// ACCOUNT GROUPS
+// ════════════════════════════════════════════
+function openManageGroups(){
+  const el=document.getElementById('groups-list-edit');
+  el.innerHTML=(data.accountGroups||[]).map(g=>`
+    <div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;font-size:13px;font-weight:500;">${g.name}</div>
+      <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" ${g.includeInMain?'checked':''} onchange="toggleGroupMain('${g.id}',this.checked)"> Total principal
+      </label>
+      <span onclick="deleteGroup('${g.id}')" style="cursor:pointer;color:var(--danger);font-size:16px;padding:0 4px;">×</span>
+    </div>`).join('');
+  openModal('modal-manage-groups');
+}
+function toggleGroupMain(id,val){const g=(data.accountGroups||[]).find(x=>x.id===id);if(g){g.includeInMain=val;saveData();}}
+function addGroup(){
+  const name=document.getElementById('new-group-name').value.trim();
+  if(!name){showToast('Donnez un nom au groupe');return;}
+  if(!data.accountGroups)data.accountGroups=[];
+  data.accountGroups.push({id:uid(),name,includeInMain:false});
+  document.getElementById('new-group-name').value='';
+  openManageGroups();saveData();showToast('Groupe créé ✓');
+}
+function deleteGroup(id){
+  const first=(data.accountGroups||[]).find(g=>g.id!==id);
+  data.accounts.forEach(a=>{if(a.groupId===id)a.groupId=first?first.id:null;});
+  data.accountGroups=(data.accountGroups||[]).filter(g=>g.id!==id);
+  openManageGroups();saveData();
+}
+function populateGroupSel(selId,selectedId){
+  const sel=document.getElementById(selId);if(!sel)return;
+  sel.innerHTML=(data.accountGroups||[]).map(g=>`<option value="${g.id}" ${g.id===selectedId?'selected':''}>${g.name}</option>`).join('');
+}
+function populateAccountSel(selId,selectedId,withNone=true){
+  const sel=document.getElementById(selId);if(!sel)return;
+  sel.innerHTML=(withNone?'<option value="">— Aucun —</option>':'')+
+    data.accounts.map(a=>`<option value="${a.id}" ${a.id===selectedId?'selected':''}>${a.name}</option>`).join('');
+}
 
-    renderTicketConfirmation();
-    closeModal('modal-scan');
-    openModal('modal-confirm-ticket');
-  } finally {
-    document.getElementById('scan-loading').style.display = 'none';
-    event.target.value = '';
+function openAddAccount(){
+  populateGroupSel('acc-group-id',data.accountGroups?.[0]?.id);
+  openModal('modal-add-account');
+}
+
+// ════════════════════════════════════════════
+// INCOMES — edit support
+// ════════════════════════════════════════════
+function openAddIncome(){
+  _editingIncomeId=null;
+  document.getElementById('modal-add-income').querySelector('h2').textContent='Ajouter une rentrée régulière';
+  document.getElementById('modal-add-income').querySelector('.btn-accent').textContent='Ajouter';
+  document.getElementById('modal-add-income').querySelector('.btn-accent').onclick=saveIncome;
+  ['inc-name','inc-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['inc-amount'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('inc-day').value='';
+  document.getElementById('inc-freq').value='mensuel';
+  populateAccountSel('inc-account-id','');
+  openModal('modal-add-income');
+}
+function openEditIncome(id){
+  const inc=data.incomes.find(i=>i.id===id);if(!inc)return;
+  _editingIncomeId=id;
+  document.getElementById('modal-add-income').querySelector('h2').textContent='Modifier la rentrée';
+  document.getElementById('modal-add-income').querySelector('.btn-accent').textContent='Enregistrer';
+  document.getElementById('modal-add-income').querySelector('.btn-accent').onclick=saveIncome;
+  document.getElementById('inc-name').value=inc.name;
+  document.getElementById('inc-amount').value=inc.amount;
+  document.getElementById('inc-freq').value=inc.freq;
+  document.getElementById('inc-day').value=inc.day||'';
+  document.getElementById('inc-notes').value=inc.notes||'';
+  populateAccountSel('inc-account-id',inc.accountId||'');
+  openModal('modal-add-income');
+}
+function saveIncome(){
+  const name=document.getElementById('inc-name').value.trim();
+  const amount=parseFloat(document.getElementById('inc-amount').value)||0;
+  if(!name){showToast('Donnez un nom à la rentrée');return;}
+  const obj={name,amount,freq:document.getElementById('inc-freq').value,
+    day:parseInt(document.getElementById('inc-day').value)||null,
+    accountId:document.getElementById('inc-account-id').value||null,
+    notes:document.getElementById('inc-notes').value};
+  if(_editingIncomeId){
+    const inc=data.incomes.find(i=>i.id===_editingIncomeId);
+    if(inc)Object.assign(inc,obj);
+    showToast('Rentrée modifiée ✓');
+  } else {
+    data.incomes.push({id:uid(),...obj});
+    showToast('Rentrée ajoutée ✓');
+  }
+  closeModal('modal-add-income');renderIncomes();saveData();
+}
+
+// ════════════════════════════════════════════
+// CHARGES — edit support + new fields
+// ════════════════════════════════════════════
+let _editingChargeId=null;
+function openAddCharge(){
+  _editingChargeId=null;
+  document.getElementById('modal-add-charge').querySelector('h2').textContent='Ajouter une charge';
+  document.getElementById('charge-save-btn').textContent='Ajouter';
+  ['charge-name','charge-notes','charge-amount'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('charge-day').value='';
+  document.getElementById('charge-freq').value='mensuel';
+  document.getElementById('charge-cat').value='voiture';
+  document.getElementById('charge-pay-type').value='auto';
+  toggleChargeDayField();
+  populateAccountSel('charge-account-id','');
+  openModal('modal-add-charge');
+}
+function openEditCharge(id){
+  const c=data.charges.find(x=>x.id===id);if(!c)return;
+  _editingChargeId=id;
+  document.getElementById('modal-add-charge').querySelector('h2').textContent='Modifier la charge';
+  document.getElementById('charge-save-btn').textContent='Enregistrer';
+  document.getElementById('charge-name').value=c.name;
+  document.getElementById('charge-amount').value=c.amount;
+  document.getElementById('charge-freq').value=c.freq;
+  document.getElementById('charge-cat').value=c.cat;
+  document.getElementById('charge-month').value=c.month||1;
+  document.getElementById('charge-day').value=c.day||'';
+  document.getElementById('charge-pay-type').value=c.payType||'auto';
+  document.getElementById('charge-notes').value=c.notes||'';
+  populateAccountSel('charge-account-id',c.accountId||'');
+  toggleChargeDayField();
+  openModal('modal-add-charge');
+}
+function toggleChargeDayField(){
+  const freq=document.getElementById('charge-freq').value;
+  const mf=document.getElementById('charge-month-field');
+  if(mf)mf.style.display=freq==='mensuel'?'none':'flex';
+}
+function saveCharge(){
+  const name=document.getElementById('charge-name').value.trim();
+  const amount=parseFloat(document.getElementById('charge-amount').value);
+  if(!name||isNaN(amount)){showToast('Remplissez le nom et le montant');return;}
+  const freq=document.getElementById('charge-freq').value;
+  const obj={name,cat:document.getElementById('charge-cat').value,freq,amount,
+    month:freq==='mensuel'?null:parseInt(document.getElementById('charge-month').value),
+    day:parseInt(document.getElementById('charge-day').value)||null,
+    payType:document.getElementById('charge-pay-type').value,
+    accountId:document.getElementById('charge-account-id').value||null,
+    notes:document.getElementById('charge-notes').value};
+  if(_editingChargeId){
+    const c=data.charges.find(x=>x.id===_editingChargeId);
+    if(c)Object.assign(c,obj);
+    showToast('Charge modifiée ✓');
+  } else {
+    data.charges.push({id:uid(),...obj});
+    showToast('Charge ajoutée ✓');
+  }
+  closeModal('modal-add-charge');renderCharges();saveData();
+}
+
+// ════════════════════════════════════════════
+// MULTI-PHOTO SCAN
+// ════════════════════════════════════════════
+function openScanModal(){
+  _pendingPhotos=[];
+  document.getElementById('photo-preview-wrap').style.display='none';
+  document.getElementById('photo-thumbs').innerHTML='';
+  document.getElementById('scan-loading').style.display='none';
+  document.getElementById('file-input').value='';
+  openModal('modal-scan');
+}
+function handleImagesSelected(e){
+  const files=Array.from(e.target.files);if(!files.length)return;
+  files.forEach(file=>{_pendingPhotos.push({file,url:URL.createObjectURL(file),b64:null});});
+  e.target.value='';
+  renderPhotoThumbs();
+}
+function renderPhotoThumbs(){
+  const wrap=document.getElementById('photo-preview-wrap');
+  const thumbs=document.getElementById('photo-thumbs');
+  if(!_pendingPhotos.length){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  thumbs.innerHTML=_pendingPhotos.map((p,i)=>`<div class="photo-thumb-wrap">
+    <img src="${p.url}" class="photo-thumb">
+    <button class="photo-del" onclick="removePhoto(${i})">×</button>
+  </div>`).join('');
+}
+function removePhoto(i){URL.revokeObjectURL(_pendingPhotos[i].url);_pendingPhotos.splice(i,1);renderPhotoThumbs();}
+async function readB64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});}
+
+async function analyzeAllPhotos(){
+  if(!_pendingPhotos.length){showToast('Aucune photo sélectionnée');return;}
+  const loadEl=document.getElementById('scan-loading');
+  const msgEl=document.getElementById('scan-loading-msg');
+  loadEl.style.display='block';
+  closeModal('modal-scan');
+  let merged={shop:'',date:'',total:0,items:[]};
+  for(let i=0;i<_pendingPhotos.length;i++){
+    msgEl.textContent=`Analyse photo ${i+1}/${_pendingPhotos.length}...`;
+    const p=_pendingPhotos[i];
+    try{
+      if(!p.b64)p.b64=await readB64(p.file);
+      let ticket;
+      if(data.googleVisionKey){ticket=await analyzeWithVision(p.b64,p.file.type);}
+      else{ticket={shop:merged.shop||'',date:merged.date||new Date().toISOString().split('T')[0],total:0,items:[]};}
+      if(!merged.shop&&ticket.shop)merged.shop=ticket.shop;
+      if(!merged.date&&ticket.date)merged.date=ticket.date;
+      merged.total+=ticket.total;
+      // deduplicate items: same name + similar price = same ticket duplicate
+      ticket.items.forEach(ni=>{
+        const dup=merged.items.find(ei=>ei.name.toLowerCase()===ni.name.toLowerCase()&&Math.abs(ei.unitPrice-ni.unitPrice)<0.02);
+        if(!dup)merged.items.push(ni);
+      });
+    }catch(err){console.warn('Vision error photo',i,err);}
+  }
+  loadEl.style.display='none';
+  _pendingPhotos=[];
+  if(!merged.date)merged.date=new Date().toISOString().split('T')[0];
+  if(data.googleVisionKey&&merged.items.length>0){
+    displayScanResults(merged);
+  } else {
+    loadEl.style.display='none';
+    openModal('modal-manual-ticket');
+    document.getElementById('mt-date').value=merged.date;
+    document.getElementById('mt-shop').value=merged.shop||'';
   }
 }
 
-function renderTicketConfirmation(){
-  if(!pendingTicketData){ return; }
+// ════════════════════════════════════════════
+// PAYMENT SPLITS
+// ════════════════════════════════════════════
+function renderPaymentSplits(){
+  const ticket=window._pendingTicket;if(!ticket)return;
+  if(!ticket.payments||!ticket.payments.length){ticket.payments=[{accountId:data.accounts[0]?.id||'',amount:ticket.total||0}];}
+  const el=document.getElementById('scan-payment-split');if(!el)return;
+  el.innerHTML=ticket.payments.map((p,i)=>`<div class="split-row">
+    <select onchange="updateSplit(${i},'accountId',this.value)">${data.accounts.map(a=>`<option value="${a.id}" ${a.id===p.accountId?'selected':''}>${a.name}</option>`).join('')}</select>
+    <input type="number" value="${p.amount}" step="0.01" onchange="updateSplit(${i},'amount',parseFloat(this.value))" placeholder="€">
+    ${ticket.payments.length>1?`<span onclick="removeSplit(${i})" style="cursor:pointer;color:var(--text3);font-size:16px;">×</span>`:''}
+  </div>`).join('');
+}
+function updateSplit(i,key,val){const t=window._pendingTicket;if(t&&t.payments[i])t.payments[i][key]=val;}
+function removeSplit(i){const t=window._pendingTicket;if(t){t.payments.splice(i,1);renderPaymentSplits();}}
+function addPaymentSplitRow(){
+  const t=window._pendingTicket;if(!t)return;
+  if(!t.payments)t.payments=[];
+  t.payments.push({accountId:data.accounts[0]?.id||'',amount:0});
+  renderPaymentSplits();
+}
+function addPendingItemRow(){
+  const t=window._pendingTicket;if(!t)return;
+  t.items.push({name:'',qty:1,unit:'unité',unitPrice:0,total:0,cat:'autre'});
+  displayScanResults(t);
+}
 
-  document.getElementById('confirm-ticket-shop').value = pendingTicketData.shop || '';
-  document.getElementById('confirm-ticket-date').value = pendingTicketData.date || '';
+// ════════════════════════════════════════════
+// TICKET: deduct from accounts + update articles
+// ════════════════════════════════════════════
+function addTicketToHistory(ticket){
+  // Each item: update or add to articles history
+  ticket.items.forEach(item=>{
+    if(!item.name.trim())return;
+    const ppu=item.unitPrice||0;
+    const shopLc=(ticket.shop||'').toLowerCase();
+    const existing=data.articles.filter(a=>a.name.toLowerCase()===item.name.toLowerCase()&&a.shop.toLowerCase()===shopLc);
+    if(existing.length>0){
+      const last=[...existing].sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+      // Only add new entry if price changed or new date
+      if(Math.abs(last.pricePerUnit-ppu)>0.001||last.date!==ticket.date){
+        data.articles.push({id:uid(),name:item.name,brand:last.brand||'—',shop:ticket.shop||'',price:item.total,qty:item.qty,unit:item.unit,cat:item.cat||last.cat,date:ticket.date,type:'normal',pricePerUnit:ppu});
+      }
+    } else {
+      data.articles.push({id:uid(),name:item.name,brand:'—',shop:ticket.shop||'',price:item.total,qty:item.qty,unit:item.unit,cat:item.cat||'autre',date:ticket.date,type:'normal',pricePerUnit:ppu});
+    }
+  });
+  // Deduct from accounts
+  (ticket.payments||[]).forEach(p=>{
+    const acc=data.accounts.find(a=>a.id===p.accountId);
+    if(acc&&p.amount){acc.balance-=p.amount;acc.updatedAt=new Date().toISOString();}
+  });
+}
 
-  const wrap = document.getElementById('confirm-ticket-items');
-
-  wrap.innerHTML = pendingTicketData.items.map((item, index)=>`
-    <div class="receipt-item" style="display:grid;grid-template-columns:1.8fr .7fr .7fr auto;gap:8px;padding:10px 0;">
-      <input data-field="name" data-index="${index}" value="${item.name}" style="border:1px solid var(--border-md);border-radius:6px;padding:6px;">
-      <input data-field="qty" data-index="${index}" type="number" step="0.01" value="${item.qty}" style="border:1px solid var(--border-md);border-radius:6px;padding:6px;">
-      <input data-field="total" data-index="${index}" type="number" step="0.01" value="${item.total}" style="border:1px solid var(--border-md);border-radius:6px;padding:6px;">
-      <button class="btn btn-sm btn-danger" onclick="removePendingItem(${index})">Suppr.</button>
+// ════════════════════════════════════════════
+// DUPLICATE ARTICLE DETECTION
+// ════════════════════════════════════════════
+function strSimilarity(a,b){
+  a=a.toLowerCase().trim();b=b.toLowerCase().trim();
+  if(a===b)return 1;
+  const set1=new Set(a.split(''));const set2=new Set(b.split(''));
+  const inter=[...set1].filter(c=>set2.has(c)).length;
+  return inter/Math.max(set1.size,set2.size);
+}
+function findDuplicatePairs(){
+  const names=uniqueArticleNames();
+  const dismissed=data.dismissedDuplicates||[];
+  const pairs=[];
+  for(let i=0;i<names.length;i++){
+    for(let j=i+1;j<names.length;j++){
+      const key=names[i]+'|||'+names[j];
+      if(dismissed.includes(key))continue;
+      const sim=strSimilarity(names[i],names[j]);
+      if(sim>0.68&&sim<1)pairs.push({a:names[i],b:names[j],key,sim});
+    }
+  }
+  return pairs;
+}
+function renderDupAlerts(){
+  const wrap=document.getElementById('dup-alerts-wrap');if(!wrap)return;
+  const pairs=findDuplicatePairs();
+  if(!pairs.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=pairs.slice(0,5).map(p=>`<div class="dup-alert">
+    <div class="dup-alert-title">⚠️ Articles similaires — même produit ?</div>
+    <div style="font-size:13px;margin-bottom:8px;">« <strong>${p.a}</strong> » et « <strong>${p.b}</strong> »</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-sm btn-accent" onclick="mergeArticles(${JSON.stringify(p.a)},${JSON.stringify(p.b)})">Fusionner sous "${p.a}"</button>
+      <button class="btn btn-sm" onclick="renameArticlesPair(${JSON.stringify(p.a)},${JSON.stringify(p.b)})">Renommer séparément</button>
+      <button class="btn btn-sm" onclick="dismissDup(${JSON.stringify(p.key)})">Non, différents</button>
     </div>
-  `).join('');
-
-  wrap.querySelectorAll('input').forEach(input=>{
-    input.addEventListener('input', ()=>{
-      const idx = Number(input.dataset.index);
-      const field = input.dataset.field;
-      pendingTicketData.items[idx][field] = field === 'name' ? input.value : Number(input.value);
-    });
-  });
+  </div>`).join('');
+}
+function mergeArticles(a,b){
+  data.articles.forEach(art=>{if(art.name.toLowerCase()===b.toLowerCase())art.name=a;});
+  dismissDup(a+'|||'+b);renderArticles();saveData();showToast('Fusionné sous "'+a+'" ✓');
+}
+function renameArticlesPair(a,b){
+  const na=prompt('Nouveau nom pour "'+a+'"',a);
+  if(na&&na!==a)data.articles.forEach(art=>{if(art.name.toLowerCase()===a.toLowerCase())art.name=na;});
+  const nb=prompt('Nouveau nom pour "'+b+'"',b);
+  if(nb&&nb!==b)data.articles.forEach(art=>{if(art.name.toLowerCase()===b.toLowerCase())art.name=nb;});
+  dismissDup(a+'|||'+b);renderArticles();saveData();showToast('Articles renommés ✓');
+}
+function dismissDup(key){
+  if(!data.dismissedDuplicates)data.dismissedDuplicates=[];
+  if(!data.dismissedDuplicates.includes(key))data.dismissedDuplicates.push(key);
+  renderDupAlerts();saveData();
 }
 
-function removePendingItem(index){
-  pendingTicketData.items.splice(index,1);
-  renderTicketConfirmation();
+// ════════════════════════════════════════════
+// COMPTES — grouped render
+// ════════════════════════════════════════════
+function renderComptesGroups(){
+  const wrap=document.getElementById('account-groups-wrap');if(!wrap)return;
+  const groups=data.accountGroups||[];
+  wrap.innerHTML=groups.map(g=>{
+    const accs=data.accounts.filter(a=>a.groupId===g.id);
+    const gTot=accs.reduce((s,a)=>s+(a.balance||0),0);
+    return`<div class="card" style="margin-bottom:12px;">
+      <div class="account-group-header">
+        <span class="account-group-name">${g.name}<span class="account-group-badge">${g.includeInMain?'· total principal':''}</span></span>
+        <span class="account-group-total">${fmt(gTot)}</span>
+      </div>
+      <div class="account-grid">
+        ${accs.length===0?`<div style="color:var(--text3);font-size:13px;padding:4px 14px 14px;">Aucun compte dans ce groupe.</div>`:
+          accs.map(a=>`<div class="account-card" style="border-top:3px solid ${a.color};">
+            <div class="account-card-top">
+              <div style="width:34px;height:34px;border-radius:50%;background:${a.color}22;display:flex;align-items:center;justify-content:center;font-size:17px;">${ACC_ICONS[a.type]||'💳'}</div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+                <button class="account-edit-btn" onclick="openUpdateBalance('${a.id}')">Màj solde</button>
+                <button class="account-edit-btn" onclick="deleteAccount('${a.id}')" style="color:var(--danger);border-color:rgba(192,57,43,0.3);">×</button>
+              </div>
+            </div>
+            <div class="account-name">${a.name}</div>
+            <div class="account-type">${a.notes||''}</div>
+            <div class="account-balance" style="color:${a.color};margin-top:8px;">${fmt(a.balance)}</div>
+            ${a.updatedAt?`<div class="account-updated">Màj : ${new Date(a.updatedAt).toLocaleDateString('fr-BE')}</div>`:''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function validateConfirmedTicket(){
-  if(!pendingTicketData){ return; }
-
-  pendingTicketData.shop = document.getElementById('confirm-ticket-shop').value || 'Ticket';
-  pendingTicketData.date = document.getElementById('confirm-ticket-date').value || new Date().toISOString().slice(0,10);
-  pendingTicketData.total = pendingTicketData.items.reduce((s,i)=>s + Number(i.total || 0),0);
-
-  data.tickets.unshift(pendingTicketData);
-
-  if(Array.isArray(data.articles)){
-    pendingTicketData.items.forEach(item=>{
-      data.articles.unshift({
-        id:'a'+Date.now()+Math.random().toString(36).slice(2,5),
-        name:item.name,
-        brand:'—',
-        shop:pendingTicketData.shop,
-        price:Number(item.total || 0),
-        qty:Number(item.qty || 1),
-        unit:item.unit || 'unité',
-        cat:item.cat || 'autre',
-        date:pendingTicketData.date,
-        type:'normal',
-        pricePerUnit:Number(item.total || 0) / Math.max(Number(item.qty || 1),1)
-      });
-    });
-  }
-
-  if(typeof saveData === 'function'){
-    saveData();
-  }
-
-  if(typeof renderCourses === 'function'){
-    renderCourses();
-  }
-
-  closeModal('modal-confirm-ticket');
-  showToast('Ticket enregistré et sauvegardé automatiquement.');
-}
 </script>
-
 </body>
 </html>
