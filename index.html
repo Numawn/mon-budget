@@ -1211,9 +1211,7 @@ function renderDashboard(){
   const madeAside=data.charges.filter(c=>c.freq==='annuel').reduce((s,c)=>s+chargeMonthly(c),0);
 
   renderPendingPanel();
-  const mIds=mainGroupIds();
-  const mainAssets=totalAssets(mIds.length?mIds:null);
-  document.getElementById('hero-total').textContent=fmt(mainAssets);
+  document.getElementById('hero-total').textContent=fmt(assets);
   document.getElementById('hero-sub').textContent='Total général tous comptes : '+fmt(allAssets);
   document.getElementById('hero-income').textContent=fmt(allIncome);
   document.getElementById('hero-expenses').textContent=fmt(allExpenses);
@@ -2065,7 +2063,6 @@ function saveIncome(){
 // ════════════════════════════════════════════
 // CHARGES — edit support + new fields
 // ════════════════════════════════════════════
-let _editingChargeId=null;
 function openAddCharge(){
   _editingChargeId=null;
   document.getElementById('modal-add-charge').querySelector('h2').textContent='Ajouter une charge';
