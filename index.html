@@ -714,15 +714,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="modal">
     <div class="modal-header"><h2>Scanner un ticket de caisse</h2><button class="modal-close" onclick="closeModal('modal-scan')">×</button></div>
     <div class="modal-body">
-      <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)">
+      <input type="file" id="file-input" accept="image/*" multiple onchange="handleImagesSelected(event)" style="display:none;">
       <div class="scan-zone" onclick="document.getElementById('file-input').click()">
         <div class="icon">📷</div>
-        <p>Cliquez pour choisir une photo de ticket</p>
-        <small id="scan-hint">Google Vision sera utilisé si configuré, sinon saisie manuelle</small>
+        <p>Cliquez pour choisir une ou plusieurs photos</p>
+        <small>Pour les grands tickets : prenez plusieurs photos, elles seront fusionnées automatiquement</small>
+      </div>
+      <div id="photo-preview-wrap" style="display:none;padding:10px 0 0;">
+        <div style="font-size:12px;color:var(--text2);font-weight:500;margin-bottom:6px;padding:0 14px;">Photos sélectionnées :</div>
+        <div class="photo-thumbs" id="photo-thumbs"></div>
+        <div style="display:flex;gap:8px;padding:0 14px 10px;">
+          <button class="btn btn-sm" onclick="document.getElementById('file-input').click()">+ Ajouter photos</button>
+          <button class="btn btn-sm btn-accent" onclick="analyzeAllPhotos()">🔍 Analyser</button>
+        </div>
       </div>
       <div id="scan-loading" style="display:none;" class="loading">
         <div class="spinner"></div>
-        Analyse du ticket en cours...
+        <div id="scan-loading-msg">Analyse en cours...</div>
       </div>
     </div>
   </div>
@@ -753,7 +761,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="modal-header"><h2>Ajouter un compte</h2><button class="modal-close" onclick="closeModal('modal-add-account')">×</button></div>
     <div class="modal-body">
       <div class="form-grid">
-        <div class="form-field form-full"><label>Nom du compte</label><input type="text" id="acc-name" placeholder="ex: BNP principal, Wise, Edenred..."></div>
+        <div class="form-field form-full"><label>Nom du compte</label><input type="text" id="acc-name" placeholder="ex: BNP Principal, Wise, Edenred..."></div>
         <div class="form-field"><label>Type</label>
           <select id="acc-type">
             <option value="banque">🏦 Compte bancaire</option>
@@ -764,18 +772,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           </select>
         </div>
         <div class="form-field"><label>Solde actuel (€)</label><input type="number" id="acc-balance" placeholder="0.00" step="0.01"></div>
-        <div class="form-field"><label>Groupe</label><select id="acc-group-id"><option value="">— Aucun —</option></select></div>
+        <div class="form-field"><label>Groupe</label>
+          <select id="acc-group-id"><option value="">— Aucun —</option></select>
+        </div>
         <div class="form-field"><label>Couleur</label>
           <select id="acc-color">
-            <option value="#2D6A4F">Vert</option>
-            <option value="#185FA5">Bleu</option>
-            <option value="#5B3FA6">Violet</option>
-            <option value="#B85C00">Orange</option>
-            <option value="#993556">Rose</option>
-            <option value="#546E7A">Gris bleu</option>
+            <option value="#185FA5">Bleu</option><option value="#2D6A4F">Vert</option>
+            <option value="#5B3FA6">Violet</option><option value="#B85C00">Orange</option>
+            <option value="#993556">Rose</option><option value="#546E7A">Gris bleu</option>
           </select>
         </div>
-        <div class="form-field form-full"><label>Notes</label><input type="text" id="acc-notes" placeholder="ex: Pour les charges voiture"></div>
+        <div class="form-field"><label>Notes</label><input type="text" id="acc-notes" placeholder="ex: Pour les charges voiture"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -802,11 +809,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 <div class="modal-overlay" id="modal-add-income">
   <div class="modal">
-    <div class="modal-header"><h2>Ajouter une rentrée régulière</h2><button class="modal-close" onclick="closeModal('modal-add-income')">×</button></div>
+    <div class="modal-header"><h2 id="income-modal-title">Ajouter une rentrée régulière</h2><button class="modal-close" onclick="closeModal('modal-add-income')">×</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-field form-full"><label>Nom</label><input type="text" id="inc-name" placeholder="ex: Salaire, Chèques repas..."></div>
-        <div class="form-field"><label>Montant estimé (€)</label><input type="number" id="inc-amount" placeholder="0.00" step="0.01"></div>
+        <div class="form-field"><label>Montant (€)</label><input type="number" id="inc-amount" placeholder="0.00" step="0.01"></div>
         <div class="form-field"><label>Fréquence</label>
           <select id="inc-freq">
             <option value="mensuel">Mensuel</option>
@@ -815,12 +822,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <option value="annuel">Annuel</option>
           </select>
         </div>
+        <div class="form-field"><label>Jour du mois <small style="color:var(--text3);font-weight:400;">(optionnel)</small></label>
+          <input type="number" id="inc-day" placeholder="ex: 25" min="1" max="31">
+        </div>
+        <div class="form-field"><label>Compte destinataire</label>
+          <select id="inc-account-id"><option value="">— Aucun —</option></select>
+        </div>
         <div class="form-field form-full"><label>Notes</label><input type="text" id="inc-notes" placeholder="ex: Variable, environ X€"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-add-income')">Annuler</button>
-      <button class="btn btn-accent" onclick="saveIncome()">Ajouter</button>
+      <button class="btn btn-accent" id="income-modal-btn" onclick="saveIncome()">Ajouter</button>
     </div>
   </div>
 </div>
@@ -844,7 +857,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 <div class="modal-overlay" id="modal-add-charge">
   <div class="modal">
-    <div class="modal-header"><h2>Ajouter une charge</h2><button class="modal-close" onclick="closeModal('modal-add-charge')">×</button></div>
+    <div class="modal-header"><h2 id="charge-modal-title">Ajouter une charge</h2><button class="modal-close" onclick="closeModal('modal-add-charge')">×</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-field form-full"><label>Nom</label><input type="text" id="charge-name" placeholder="ex: Assurance voiture"></div>
@@ -865,16 +878,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <option value="annuel">Annuel</option>
           </select>
         </div>
-        <div class="form-field"><label>Montant (€)</label><input type="number" id="charge-amount" step="0.01"></div>
-        <div class="form-field"><label>Mois de paiement</label>
+        <div class="form-field"><label>Montant (€)</label><input type="number" id="charge-amount" placeholder="0.00" step="0.01"></div>
+        <div class="form-field" id="charge-month-field">
+          <label>Mois de paiement</label>
           <select id="charge-month">
-            <option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option><option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option><option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
+            <option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option>
+            <option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option>
+            <option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option>
+            <option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option>
           </select>
         </div>
-        <div class="form-field" id="charge-day-wrap">
-          <label>Jour du mois <small style="color:var(--text3);">(optionnel)</small></label>
-          <input type="number" id="charge-day" placeholder="ex: 15" min="1" max="31">
-          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Laissez vide si vous ne connaissez pas encore la date exacte.</div>
+        <div class="form-field">
+          <label>Jour du mois <small style="color:var(--text3);font-weight:400;">(optionnel)</small></label>
+          <input type="number" id="charge-day" placeholder="laissez vide si inconnu" min="1" max="31">
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Si vide, la charge sera affichée comme "à prévoir" sans date exacte.</div>
         </div>
         <div class="form-field"><label>Paiement</label>
           <select id="charge-pay-type">
@@ -882,7 +899,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <option value="manuel">✋ Manuel (je dois payer)</option>
           </select>
         </div>
-        <div class="form-field"><label>Compte lié</label><select id="charge-account-id"><option value="">— Aucun —</option></select></div>
+        <div class="form-field"><label>Compte lié</label>
+          <select id="charge-account-id"><option value="">— Aucun —</option></select>
+        </div>
         <div class="form-field form-full"><label>Notes</label><input type="text" id="charge-notes" placeholder="optionnel"></div>
       </div>
     </div>
@@ -1837,10 +1856,44 @@ function saveGoogleConfig(){
 // INIT
 // ════════════════════════════════════════════
 function init(){
-  try{const saved=localStorage.getItem('budget-data-v2');if(saved){const parsed=JSON.parse(saved);data={...DEFAULT_DATA,...parsed};}}catch(e){}
-  document.getElementById('mt-date')&&(document.getElementById('mt-date').value=new Date().toISOString().split('T')[0]);
-  document.getElementById('ponc-date')&&(document.getElementById('ponc-date').value=new Date().toISOString().split('T')[0]);
+  try{
+    const saved=localStorage.getItem('budget-data-v3')||localStorage.getItem('budget-data-v2');
+    if(saved){
+      const parsed=JSON.parse(saved);
+      // Carefully merge: use saved arrays, fill missing top-level keys from defaults
+      data={...DEFAULT_DATA};
+      ['accounts','incomes','ponctuals','charges','tickets','articles','dishes',
+       'currentDishIngredients','accountGroups','pendingTransactions','dismissedDuplicates',
+       'googleClientId','googleVisionKey','currentMonth','currentYear',
+       'lastOpenedAt','articleFilter'].forEach(k=>{if(parsed[k]!==undefined)data[k]=parsed[k];});
+      // Ensure accountGroups exists
+      if(!data.accountGroups||!data.accountGroups.length){
+        data.accountGroups=[
+          {id:'g1',name:'Comptes courants',includeInMain:true},
+          {id:'g2',name:'Épargne',includeInMain:false},
+          {id:'g3',name:'Chèques repas',includeInMain:false},
+        ];
+      }
+      // Migrate: assign ungrouped accounts to first group so they appear in UI
+      const firstGrp=data.accountGroups[0];
+      data.accounts.forEach(a=>{
+        if(!a.groupId||!data.accountGroups.find(g=>g.id===a.groupId)){
+          a.groupId=firstGrp?firstGrp.id:null;
+        }
+      });
+      // Migrate missing fields on existing data
+      data.tickets.forEach(t=>{if(!t.payments)t.payments=[];});
+      data.incomes.forEach(i=>{if(i.day===undefined)i.day=null;});
+      data.charges.forEach(c=>{if(!c.payType)c.payType='auto';if(!c.accountId)c.accountId=null;});
+    }
+  }catch(e){console.error('init load error',e);}
+  // Set default dates in forms
+  ['mt-date','ponc-date','art-date'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value=new Date().toISOString().split('T')[0];
+  });
   updateGoogleUI();
+  processAutoTransactions();
   renderDashboard();
 }
 init();
@@ -2009,6 +2062,9 @@ function populateAccountSel(selId,selectedId,withNone=true){
 
 function openAddAccount(){
   populateGroupSel('acc-group-id',data.accountGroups?.[0]?.id);
+  // Clear form
+  ['acc-name','acc-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const bal=document.getElementById('acc-balance');if(bal)bal.value='';
   openModal('modal-add-account');
 }
 
@@ -2017,22 +2073,18 @@ function openAddAccount(){
 // ════════════════════════════════════════════
 function openAddIncome(){
   _editingIncomeId=null;
-  document.getElementById('modal-add-income').querySelector('h2').textContent='Ajouter une rentrée régulière';
-  document.getElementById('modal-add-income').querySelector('.btn-accent').textContent='Ajouter';
-  document.getElementById('modal-add-income').querySelector('.btn-accent').onclick=saveIncome;
-  ['inc-name','inc-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  ['inc-amount'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('inc-day').value='';
-  document.getElementById('inc-freq').value='mensuel';
+  const h2=document.getElementById('income-modal-title');if(h2)h2.textContent='Ajouter une rentrée régulière';
+  const btn=document.getElementById('income-modal-btn');if(btn){btn.textContent='Ajouter';btn.onclick=saveIncome;}
+  ['inc-name','inc-notes','inc-amount','inc-day'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const freq=document.getElementById('inc-freq');if(freq)freq.value='mensuel';
   populateAccountSel('inc-account-id','');
   openModal('modal-add-income');
 }
 function openEditIncome(id){
   const inc=data.incomes.find(i=>i.id===id);if(!inc)return;
   _editingIncomeId=id;
-  document.getElementById('modal-add-income').querySelector('h2').textContent='Modifier la rentrée';
-  document.getElementById('modal-add-income').querySelector('.btn-accent').textContent='Enregistrer';
-  document.getElementById('modal-add-income').querySelector('.btn-accent').onclick=saveIncome;
+  const h2=document.getElementById('income-modal-title');if(h2)h2.textContent='Modifier la rentrée';
+  const btn=document.getElementById('income-modal-btn');if(btn){btn.textContent='Enregistrer';btn.onclick=saveIncome;}
   document.getElementById('inc-name').value=inc.name;
   document.getElementById('inc-amount').value=inc.amount;
   document.getElementById('inc-freq').value=inc.freq;
@@ -2065,13 +2117,12 @@ function saveIncome(){
 // ════════════════════════════════════════════
 function openAddCharge(){
   _editingChargeId=null;
-  document.getElementById('modal-add-charge').querySelector('h2').textContent='Ajouter une charge';
-  document.getElementById('charge-save-btn').textContent='Ajouter';
-  ['charge-name','charge-notes','charge-amount'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('charge-day').value='';
-  document.getElementById('charge-freq').value='mensuel';
-  document.getElementById('charge-cat').value='voiture';
-  document.getElementById('charge-pay-type').value='auto';
+  const h2=document.getElementById('charge-modal-title');if(h2)h2.textContent='Ajouter une charge';
+  const btn=document.getElementById('charge-save-btn');if(btn)btn.textContent='Ajouter';
+  ['charge-name','charge-notes','charge-amount','charge-day'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const freq=document.getElementById('charge-freq');if(freq)freq.value='mensuel';
+  const cat=document.getElementById('charge-cat');if(cat)cat.value='voiture';
+  const pt=document.getElementById('charge-pay-type');if(pt)pt.value='auto';
   toggleChargeDayField();
   populateAccountSel('charge-account-id','');
   openModal('modal-add-charge');
@@ -2079,8 +2130,8 @@ function openAddCharge(){
 function openEditCharge(id){
   const c=data.charges.find(x=>x.id===id);if(!c)return;
   _editingChargeId=id;
-  document.getElementById('modal-add-charge').querySelector('h2').textContent='Modifier la charge';
-  document.getElementById('charge-save-btn').textContent='Enregistrer';
+  const h2=document.getElementById('charge-modal-title');if(h2)h2.textContent='Modifier la charge';
+  const btn=document.getElementById('charge-save-btn');if(btn)btn.textContent='Enregistrer';
   document.getElementById('charge-name').value=c.name;
   document.getElementById('charge-amount').value=c.amount;
   document.getElementById('charge-freq').value=c.freq;
