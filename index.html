@@ -1513,25 +1513,121 @@ async function analyzeWithVision(b64,mimeType){
 }
 
 function parseReceiptText(text){
-  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const items=[];let shop='',date='',total=0;
-  // date detection
-  const dateMatch=text.match(/(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})/);
-  if(dateMatch)date=`${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
-  // shop: first non-empty line
-  if(lines.length>0)shop=lines[0];
-  // total
-  const totalMatch=text.match(/[Tt]otal[^\d]*(\d+[,.]\d{2})/);
-  if(totalMatch)total=parseFloat(totalMatch[1].replace(',','.'));
-  // items: lines with price pattern
-  lines.forEach(line=>{
-    const m=line.match(/^(.+?)\s+(\d+[,.]\d{2})\s*$/);
-    if(m&&!line.toLowerCase().includes('total')){
-      const price=parseFloat(m[2].replace(',','.'));
-      items.push({name:m[1].trim(),qty:1,unit:'unité',unitPrice:price,total:price,cat:'autre'});
+  const rawLines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+
+  // ── 1. DATE ──────────────────────────────────────────────────
+  let date='';
+  for(const line of rawLines){
+    const m=line.match(/(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})/);
+    if(m){date=`${m[3]}-${m[2]}-${m[1]}`;break;}
+  }
+
+  // ── 2. SHOP NAME — line just before "Ticket de caisse" ───────
+  let shop='';
+  for(let i=0;i<rawLines.length;i++){
+    if(/ticket de caisse/i.test(rawLines[i])){
+      const candidates=rawLines.slice(Math.max(0,i-4),i)
+        .filter(l=>l.length>2&&!/\d{3,}/.test(l)&&!/tél|tel|\+\d/i.test(l));
+      if(candidates.length)shop=candidates[candidates.length-1];
+      break;
     }
-  });
-  return{shop,date:date||new Date().toISOString().split('T')[0],total:total||items.reduce((s,i)=>s+i.total,0),items};
+  }
+  if(!shop)shop=rawLines[0]||'';
+
+  // ── 3. TOTAL ─────────────────────────────────────────────────
+  let total=0;
+  for(let i=0;i<rawLines.length;i++){
+    if(/^total/i.test(rawLines[i])){
+      for(let j=i;j<Math.min(i+3,rawLines.length);j++){
+        const m=rawLines[j].match(/€?\s*(\d+)[,.](\d{2})/);
+        if(m){total=parseFloat(`${m[1]}.${m[2]}`);break;}
+      }
+      if(total)break;
+    }
+  }
+
+  // ── 4. CATEGORY HELPER ────────────────────────────────────────
+  const CAT_KW={
+    'fruits-legumes':['banane','pomme','poire','prune','tomate','broccoli','brocoli','carotte',
+      'salade','courgette','poivron','oignon','ail','citron','orange','raisin','peche',
+      'fraise','cerise','kiwi','mangue','ananas','melon','radis','navet','chou','poireau'],
+    'produits-laitiers':['yog','yogurt','yaourt','lait','fromage','beurre','creme','grec',
+      'mozzarella','ricotta','emmental','gouda'],
+    'hygiene':['cosynel','carefree','always','tampax','pampers','dove','shampoo','dentifrice',
+      'savon','deodorant','rasoir','serviette hygien','toilette','gel douche','mousse'],
+    'menage':['ajax','mr.proper','fairy','finish','ariel','persil','swiffer','essuie','torchon',
+      'sac poubelle','liquide vaisselle'],
+    'cereales':['avoine','muesli','granola','flocon','pain','brioche','farine','riz','pate',
+      'nouille','couscous','quinoa'],
+    'proteines':['poulet','boeuf','porc','saumon','thon','oeuf','jambon','steak','viande',
+      'filet','escalope','crevette','cabillaud'],
+    'snacks':['chips','biscuit','chocolat','bonbon','gateau','cookie','cracker','popcorn'],
+  };
+  function guessCat(name){
+    const nl=name.toLowerCase();
+    for(const[cat,kws]of Object.entries(CAT_KW)){if(kws.some(k=>nl.includes(k)))return cat;}
+    return'autre';
+  }
+  function guessUnit(name,qty){
+    const nl=name.toLowerCase();
+    if(/\d+\s*kg/.test(nl))return'kg';
+    if(/\d+\s*g\b/.test(nl))return'g';
+    if(/\d+\s*l\b/.test(nl))return'l';
+    if(/\d+\s*ml/.test(nl))return'ml';
+    // fractional qty at grocery almost always means kg
+    if(qty!==Math.floor(qty))return'kg';
+    return'unité';
+  }
+
+  // ── 5. ITEM PARSING ──────────────────────────────────────────
+  const SKIP_RX=/total|ticket|caisse|date|tél|tel|nom article|mode de paiement|bancontact|carte bancaire|a payer|articles|montant|px\.unit|valeur|wemperhardt|haart|\+\d{3}|L-\d{4}/i;
+  const items=[];
+
+  for(const line of rawLines){
+    if(SKIP_RX.test(line))continue;
+    if(/^\d{6,}/.test(line))continue; // ticket number lines
+
+    // Pattern A: qty glued to name — "1cosynel..." or "0,90bananes..."
+    let m=line.match(/^(\d+[,.]\d+|\d+)([a-zA-ZÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s+(\d+[,.]\d{2})\s*$/);
+    if(m){
+      const qty=parseFloat(m[1].replace(',','.'));
+      const name=m[2].trim();
+      const unitPrice=parseFloat(m[3].replace(',','.'));
+      const lineTotal=parseFloat(m[4].replace(',','.'));
+      const unit=guessUnit(name,qty);
+      items.push({name,qty,unit,unitPrice,total:lineTotal,cat:guessCat(name)});
+      continue;
+    }
+
+    // Pattern B: qty space name price price
+    m=line.match(/^(\d+[,.]\d+|\d+)\s+([a-zA-ZÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s+(\d+[,.]\d{2})\s*$/);
+    if(m){
+      const qty=parseFloat(m[1].replace(',','.'));
+      const name=m[2].trim();
+      const unitPrice=parseFloat(m[3].replace(',','.'));
+      const lineTotal=parseFloat(m[4].replace(',','.'));
+      const unit=guessUnit(name,qty);
+      items.push({name,qty,unit,unitPrice,total:lineTotal,cat:guessCat(name)});
+      continue;
+    }
+
+    // Pattern C: name + single price (fallback)
+    m=line.match(/^([a-zA-ZÀ-ÿ].{3,}?)\s+(\d+[,.]\d{2})\s*$/);
+    if(m){
+      const name=m[1].trim();
+      const price=parseFloat(m[2].replace(',','.'));
+      if(price>0&&price<500&&!/^\d/.test(name)){
+        items.push({name,qty:1,unit:'unité',unitPrice:price,total:price,cat:guessCat(name)});
+      }
+    }
+  }
+
+  return{
+    shop,
+    date:date||new Date().toISOString().split('T')[0],
+    total:total||items.reduce((s,i)=>s+i.total,0),
+    items
+  };
 }
 
 const ALL_CATS=['fruits-legumes','produits-laitiers','hygiene','menage','cereales','proteines','snacks','autre'];
