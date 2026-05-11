@@ -455,8 +455,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="page-sub">Mettez à jour vos soldes manuellement</div>
     </div>
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-accent" onclick="openModal('modal-add-account')">+ Compte</button>
-      <button class="btn btn-accent" onclick="openModal('modal-add-income')">+ Rentrée</button>
+      <button class="btn btn-accent" onclick="openAddAccount()">+ Compte</button>
+      <button class="btn btn-accent" onclick="openAddIncome()">+ Rentrée</button>
     </div>
   </div>
 
@@ -489,7 +489,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="page-title">Charges fixes</div>
       <div class="page-sub">Toutes ramenées en €/mois pour comparer</div>
     </div>
-    <button class="btn btn-accent" onclick="openModal('modal-add-charge')">+ Ajouter</button>
+    <button class="btn btn-accent" onclick="openAddCharge()">+ Ajouter</button>
   </div>
   <div class="card">
     <div id="charges-list"></div>
@@ -820,7 +820,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-add-income')">Annuler</button>
-      <button class="btn btn-accent" onclick="addIncome()">Ajouter</button>
+      <button class="btn btn-accent" onclick="saveIncome()">Ajouter</button>
     </div>
   </div>
 </div>
@@ -859,7 +859,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           </select>
         </div>
         <div class="form-field"><label>Fréquence</label>
-          <select id="charge-freq">
+          <select id="charge-freq" onchange="toggleChargeDayField()">
             <option value="mensuel">Mensuel</option>
             <option value="trimestriel">Trimestriel</option>
             <option value="annuel">Annuel</option>
@@ -1205,14 +1205,16 @@ function renderDashboard(){
   const allIncome=incomeTotal+ponctualTotal;
   const allExpenses=charges+coursesTotal;
   const monthBalance=allIncome-allExpenses;
-  const assets=totalAssets();
+  const mIds=mainGroupIds();
+  const assets=totalAssets(mIds.length?mIds:null);
+  const allAssets=totalAssets();
   const madeAside=data.charges.filter(c=>c.freq==='annuel').reduce((s,c)=>s+chargeMonthly(c),0);
 
   renderPendingPanel();
   const mIds=mainGroupIds();
   const mainAssets=totalAssets(mIds.length?mIds:null);
   document.getElementById('hero-total').textContent=fmt(mainAssets);
-  document.getElementById('hero-sub').textContent='Total général tous comptes : '+fmt(totalAssets());
+  document.getElementById('hero-sub').textContent='Total général tous comptes : '+fmt(allAssets);
   document.getElementById('hero-income').textContent=fmt(allIncome);
   document.getElementById('hero-expenses').textContent=fmt(allExpenses);
   document.getElementById('hero-balance').textContent=(monthBalance>=0?'+':'')+fmt(monthBalance);
@@ -1317,7 +1319,6 @@ function renderComptes(){
       <div class="account-balance" style="color:${a.color};margin-top:8px;">${fmt(a.balance)}</div>
       ${a.updatedAt?`<div class="account-updated">Mis à jour le ${new Date(a.updatedAt).toLocaleDateString('fr-BE')}</div>`:''}
     </div>`).join('');
-  }
   renderIncomes();
 }
 
@@ -1926,7 +1927,6 @@ function renderPendingPanel(){
   </div>`;
 }
 
-let _pendingTxId=null;
 function openPendingConfirm(id){
   _pendingTxId=id;
   const tx=(data.pendingTransactions||[]).find(t=>t.id===id);if(!tx)return;
