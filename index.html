@@ -513,11 +513,32 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div>
       <div class="card" id="scan-results-card" style="display:none;">
         <div class="card-header">
-          <h2 id="scan-shop-name">Ticket scanné</h2>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;">
+            <div id="scan-shop-display" style="cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="toggleShopEdit()" title="Cliquer pour modifier">
+              <h2 id="scan-shop-name" style="font-size:15px;">Ticket scanné</h2>
+              <span style="font-size:11px;color:var(--text3);">✎</span>
+            </div>
+            <div id="scan-shop-edit" style="display:none;flex:1;gap:6px;align-items:center;">
+              <select id="scan-shop-select" style="flex:1;border:1px solid var(--border-md);border-radius:var(--radius-sm);padding:5px 8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--bg);" onchange="onShopSelectChange(this.value)">
+                <option value="__new__">+ Nouveau magasin...</option>
+              </select>
+              <input type="text" id="scan-shop-input" placeholder="Nom du magasin" style="flex:1;border:1px solid var(--accent);border-radius:var(--radius-sm);padding:5px 8px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--bg);display:none;">
+              <button class="btn btn-sm btn-accent" onclick="confirmShopEdit()">✓</button>
+              <button class="btn btn-sm" onclick="toggleShopEdit()">×</button>
+            </div>
+          </div>
           <div class="card-actions">
             <span id="scan-date-label" style="font-size:12px;color:var(--text3);"></span>
             <button class="btn btn-sm btn-accent" onclick="saveTicket()">✓ Enregistrer</button>
           </div>
+        </div>
+        <!-- Debug panel: collapsible raw OCR text -->
+        <div id="scan-debug-wrap" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+            <span style="font-size:11px;color:var(--text3);font-weight:500;">🔍 Texte brut Vision API (debug)</span>
+            <span style="font-size:11px;color:var(--text3);">▼ afficher/masquer</span>
+          </div>
+          <pre id="scan-debug-raw" style="display:none;font-size:10px;color:var(--text2);padding:8px 14px 12px;overflow-x:auto;white-space:pre-wrap;max-height:200px;overflow-y:auto;line-height:1.5;"></pre>
         </div>
         <div class="receipt-list" id="scan-items-list"></div>
         <div class="receipt-total"><span>Total ticket</span><span id="scan-total">—</span></div>
@@ -1504,90 +1525,56 @@ async function handleImageUpload(event){
 async function analyzeWithVision(b64,mimeType){
   const resp=await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${data.googleVisionKey}`,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({requests:[{image:{content:b64},features:[{type:'TEXT_DETECTION',maxResults:1}]}]})
+    body:JSON.stringify({requests:[{image:{content:b64},features:[
+      {type:'DOCUMENT_TEXT_DETECTION',maxResults:1}
+    ]}]})
   });
-  if(!resp.ok)throw new Error('Vision error');
+  if(!resp.ok)throw new Error('Vision error '+resp.status);
   const d=await resp.json();
-  const text=d.responses?.[0]?.fullTextAnnotation?.text||'';
-  return parseReceiptText(text);
+  if(d.responses?.[0]?.error)throw new Error(d.responses[0].error.message);
+
+  // fullTextAnnotation preserves spatial layout better than TEXT_DETECTION
+  const fullText=d.responses?.[0]?.fullTextAnnotation?.text||'';
+
+  // Store raw for debug panel
+  window._lastVisionRaw=fullText;
+  const debugEl=document.getElementById('scan-debug-raw');
+  if(debugEl){
+    debugEl.textContent=fullText;
+    document.getElementById('scan-debug-wrap').style.display='block';
+  }
+
+  return parseReceiptText(fullText);
 }
 
 function parseReceiptText(text){
-  // ── PRE-PROCESS: normalize OCR quirks ────────────────────────
-  // Vision sometimes splits one line across two; rejoin lines where
-  // the second line looks like a dangling price pair.
-  const raw=text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const rawLines=[];
-  for(let i=0;i<raw.length;i++){
-    // If next line is ONLY two prices (e.g. "3,69 3,69"), merge it with current
-    if(i+1<raw.length&&/^\d+[,.]\d{2}\s+\d+[,.]\d{2}\s*$/.test(raw[i+1])){
-      rawLines.push(raw[i]+' '+raw[i+1]);
-      i++;
-    } else {
-      rawLines.push(raw[i]);
-    }
+  // ═══════════════════════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════════════════════
+  function parsePrice(s){
+    // Handles "13,95" "13.95" "€ 13,95"
+    if(!s)return NaN;
+    return parseFloat(s.replace(/[€\s]/g,'').replace(',','.'));
   }
 
-  // ── 1. DATE ──────────────────────────────────────────────────
-  let date='';
-  for(const line of rawLines){
-    // Matches DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-    const m=line.match(/(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})/);
-    if(m){date=`${m[3]}-${m[2]}-${m[1]}`;break;}
-    // Also match "Date:09/05/2026" glued format
-    const m2=line.match(/date[:\s]*(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})/i);
-    if(m2){date=`${m2[3]}-${m2[2]}-${m2[1]}`;break;}
-  }
-
-  // ── 2. SHOP NAME — line just before "Ticket de caisse" ───────
-  let shop='';
-  for(let i=0;i<rawLines.length;i++){
-    if(/ticket de caisse/i.test(rawLines[i])){
-      const candidates=rawLines.slice(Math.max(0,i-6),i)
-        .filter(l=>l.length>2&&!/^\d/.test(l)&&!/tél|tel|\+\d/i.test(l)&&!/L-\d{4}/.test(l)&&!/op der haart/i.test(l));
-      if(candidates.length)shop=candidates[candidates.length-1];
-      break;
-    }
-  }
-  // Fallback: look for a capitalized word cluster near the top
-  if(!shop){
-    for(const line of rawLines.slice(0,8)){
-      if(/^[A-ZÀ-Ÿ][A-Za-zÀ-ÿ\s]{2,}$/.test(line)&&!/tél|tel|\+\d/i.test(line)){
-        shop=line;break;
-      }
-    }
-  }
-  if(!shop)shop=rawLines[0]||'';
-
-  // ── 3. TOTAL ─────────────────────────────────────────────────
-  let total=0;
-  for(let i=0;i<rawLines.length;i++){
-    if(/^total\b/i.test(rawLines[i])){
-      // Total may be on the same line or the next 1-2 lines
-      for(let j=i;j<Math.min(i+3,rawLines.length);j++){
-        const m=rawLines[j].match(/€?\s*(\d+)[,.](\d{2})/);
-        if(m){total=parseFloat(`${m[1]}.${m[2]}`);break;}
-      }
-      if(total)break;
-    }
-  }
-
-  // ── 4. CATEGORY HELPER ────────────────────────────────────────
   const CAT_KW={
-    'fruits-legumes':['banane','pomme','poire','prune','tomate','broccoli','brocoli','brocco','carotte',
-      'salade','courgette','poivron','oignon','ail','citron','orange','raisin','peche',
-      'fraise','cerise','kiwi','mangue','ananas','melon','radis','navet','chou','poireau','jonagold','grappe'],
+    'fruits-legumes':['banane','pomme','poire','prune','tomate','broccoli','brocoli','brocco',
+      'carotte','salade','courgette','poivron','oignon','ail','citron','orange','raisin',
+      'peche','fraise','cerise','kiwi','mangue','ananas','melon','radis','navet','chou',
+      'poireau','jonagold','grappe','raisin','poivron'],
     'produits-laitiers':['yog','yogurt','yaourt','lait','fromage','beurre','creme','grec',
-      'mozzarella','ricotta','emmental','gouda','luxlait'],
+      'mozzarella','ricotta','emmental','gouda','luxlait','cottage'],
     'hygiene':['cosynel','carefree','always','tampax','pampers','dove','shampoo','dentifrice',
-      'savon','deodorant','rasoir','serviette hygien','toilette','gel douche','mousse','p-foil','triplefresh'],
+      'savon','deodorant','rasoir','hygien','toilette','gel douche','mousse','p-foil',
+      'triplefresh','nurofen','doliprane'],
     'menage':['ajax','mr.proper','fairy','finish','ariel','persil','swiffer','essuie','torchon',
-      'sac poubelle','liquide vaisselle'],
+      'sac poubelle','liquide vaisselle','javel'],
     'cereales':['avoine','muesli','granola','flocon','pain','brioche','farine','riz','pate',
-      'nouille','couscous','quinoa'],
+      'nouille','couscous','quinoa','epeautre','seigle'],
     'proteines':['poulet','boeuf','porc','saumon','thon','oeuf','jambon','steak','viande',
-      'filet','escalope','crevette','cabillaud'],
-    'snacks':['chips','biscuit','chocolat','bonbon','gateau','cookie','cracker','popcorn'],
+      'filet','escalope','crevette','cabillaud','dinde','veau'],
+    'snacks':['chips','biscuit','chocolat','bonbon','gateau','cookie','cracker','popcorn',
+      'cacahuete','noix','amande'],
   };
   function guessCat(name){
     const nl=name.toLowerCase();
@@ -1596,82 +1583,213 @@ function parseReceiptText(text){
   }
   function guessUnit(name,qty){
     const nl=name.toLowerCase();
-    // Explicit weight/volume mentions in name
     if(/\bkg\b/.test(nl))return'kg';
     if(/\d+\s*g\b/.test(nl))return'g';
-    if(/\d+\s*l\b/.test(nl))return'l';
+    if(/\d+\s*cl\b/.test(nl))return'ml';
     if(/\d+\s*ml\b/.test(nl))return'ml';
-    // Fractional qty at a grocery almost always means kg (0.90 kg bananas)
-    if(qty!==Math.floor(qty))return'kg';
+    if(/\d+\s*l\b/.test(nl))return'l';
+    if(qty!==Math.floor(qty))return'kg'; // 0.90, 0.51 etc → weighted item
     return'unité';
   }
 
-  // ── 5. ITEM PARSING ──────────────────────────────────────────
-  // Lines to skip definitively
-  const SKIP_RX=/^(total\b|ticket|caisse|date[:\s]|tél|tel|nom article|mode de paiement|bancontact|carte bancaire|a payer|articles|montant|px\.?unit|valeur|wemperhardt|haart|\+\d{3}|L-\d{4}|\d{8,})/i;
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 1 — RAW LINE EXTRACTION
+  // Vision DOCUMENT_TEXT_DETECTION uses \n between words on same line sometimes.
+  // Strategy: split on \n, then reconstruct logical lines by detecting
+  // "line break within an article line" vs "real line break".
+  // ═══════════════════════════════════════════════════════════════
+  const raw=text.split('\n').map(l=>l.trim()).filter(Boolean);
 
+  // Merge continuation lines:
+  // A "continuation" is a line that has NO price and the previous line has NO price.
+  // A "price-only" line gets merged onto the previous line.
+  const rawLines=[];
+  const PRICE_RX=/\d+[,.]\d{2}/;
+  for(let i=0;i<raw.length;i++){
+    const cur=raw[i];
+    const next=raw[i+1]||'';
+    // If the next line is purely prices (e.g. "13,95 13,95" or "3,69"), merge it
+    if(next&&/^\d+[,.]\d{2}(\s+\d+[,.]\d{2})?$/.test(next)){
+      rawLines.push(cur+' '+next);
+      i++;
+    } else {
+      rawLines.push(cur);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 2 — DATE
+  // ═══════════════════════════════════════════════════════════════
+  let date='';
+  // Search entire raw text for any date pattern
+  const dateM=text.match(/(\d{2})[\/\-.](\d{2})[\/\-.](\d{4})/);
+  if(dateM)date=`${dateM[3]}-${dateM[2]}-${dateM[1]}`;
+
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 3 — SHOP NAME
+  // ═══════════════════════════════════════════════════════════════
+  let shop='';
+  for(let i=0;i<rawLines.length;i++){
+    if(/ticket\s*de\s*caisse/i.test(rawLines[i])){
+      // Take the last non-garbage line before this
+      const candidates=rawLines.slice(Math.max(0,i-8),i)
+        .filter(l=>{
+          if(l.length<2)return false;
+          if(/tél|tel|\+\d{3}/i.test(l))return false;   // phone
+          if(/L-\d{4}/.test(l))return false;              // postal code Luxembourg
+          if(/op der|haart|wemperhardt/i.test(l))return false; // address
+          if(/^\d/.test(l))return false;                   // starts with digit
+          if(PRICE_RX.test(l))return false;               // has a price
+          return true;
+        });
+      if(candidates.length)shop=candidates[candidates.length-1];
+      break;
+    }
+  }
+  // Fallback: first all-caps word in first 6 lines
+  if(!shop){
+    for(const l of rawLines.slice(0,6)){
+      if(/^[A-ZÀ-Ÿ\s]{3,}$/.test(l)&&!/TÉL|TEL/.test(l)){shop=l.trim();break;}
+    }
+  }
+  if(!shop)shop='';
+
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 4 — TOTAL
+  // ═══════════════════════════════════════════════════════════════
+  let total=0;
+  // Find the LARGEST price after a "Total" keyword — avoids sub-totals
+  for(let i=0;i<rawLines.length;i++){
+    if(/\btotal\b/i.test(rawLines[i])&&!/sous.total|subtotal/i.test(rawLines[i])){
+      for(let j=i;j<Math.min(i+4,rawLines.length);j++){
+        const pm=rawLines[j].match(/€?\s*(\d+)[,.](\d{2})/g);
+        if(pm){
+          const prices=pm.map(p=>parsePrice(p)).filter(p=>p>0);
+          if(prices.length){total=Math.max(...prices);break;}
+        }
+      }
+      if(total)break;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 5 — FIND ITEM SECTION BOUNDARIES
+  // Items appear between "Nom Article" header and "Total" footer
+  // ═══════════════════════════════════════════════════════════════
+  let startIdx=0,endIdx=rawLines.length;
+  for(let i=0;i<rawLines.length;i++){
+    if(/nom\s*article/i.test(rawLines[i])){startIdx=i+1;break;}
+    if(/ticket\s*de\s*caisse/i.test(rawLines[i])&&i>startIdx)startIdx=i+1;
+  }
+  for(let i=startIdx;i<rawLines.length;i++){
+    if(/^\s*total\b/i.test(rawLines[i])){endIdx=i;break;}
+    if(/mode\s*de\s*paiement/i.test(rawLines[i])){endIdx=i;break;}
+    if(/bancontact|carte\s*bancaire/i.test(rawLines[i])){endIdx=i;break;}
+  }
+  const itemLines=rawLines.slice(startIdx,endIdx).filter(l=>{
+    if(/tél|tel|\+\d{3}|L-\d{4}|op der|haart|wemperhardt|ticket:|^\d{6,}/i.test(l))return false;
+    if(l.length<3)return false;
+    if(/^px\.?\s*unit|^valeur|^nom article|^\d+\s*articles?$/i.test(l))return false;
+    return true;
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 6 — PARSE ITEMS
+  // Try multiple regex strategies per line, pick first that makes sense
+  // ═══════════════════════════════════════════════════════════════
   const items=[];
 
-  for(const line of rawLines){
-    if(SKIP_RX.test(line))continue;
+  for(let i=0;i<itemLines.length;i++){
+    const line=itemLines[i];
 
-    // ── Pattern A (Massen style): qty glued to name, two prices at end
-    // e.g.  "1cosynel p-foil bleu 16+2rlx 13,95 13,95"
-    // e.g.  "0,90bananes chiquita 2,19 1,97"
-    // e.g.  "1,12pomme jonagold 2,15 2,42"
-    // The qty is an integer OR decimal with comma, immediately followed by a letter.
-    let m=line.match(/^(\d+[,.]\d+|\d+)([A-Za-zÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s+(\d+[,.]\d{2})\s*$/);
-    if(m){
-      const qty=parseFloat(m[1].replace(',','.'));
-      const name=m[2].trim();
-      const unitPrice=parseFloat(m[3].replace(',','.'));
-      const lineTotal=parseFloat(m[4].replace(',','.'));
-      if(lineTotal>0&&lineTotal<2000){
-        const unit=guessUnit(name,qty);
-        items.push({name,qty,unit,unitPrice,total:lineTotal,cat:guessCat(name)});
-        continue;
+    // Check if the NEXT line (not yet merged) is a price-pair continuation
+    // (Vision sometimes puts prices on a separate line from the item name)
+    let fullLine=line;
+    if(i+1<itemLines.length){
+      const nextL=itemLines[i+1];
+      if(/^\d+[,.]\d{2}(\s+\d+[,.]\d{2})?$/.test(nextL)&&!PRICE_RX.test(line)){
+        fullLine=line+' '+nextL;
+        i++; // consume the next line
       }
     }
 
-    // ── Pattern B: qty space name price price
-    // e.g.  "1 cosynel p-foil bleu 13,95 13,95"
-    m=line.match(/^(\d+[,.]\d+|\d+)\s+([A-Za-zÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s+(\d+[,.]\d{2})\s*$/);
-    if(m){
+    let item=null;
+
+    // ── STRATEGY A: qty (integer or decimal with comma/dot) GLUED to name
+    // Covers: "1cosynel...", "0,90bananes...", "1,12pomme..."
+    // Two prices at end: unit price + line total
+    let m=fullLine.match(/^(\d+[,.]?\d*)\s*([A-Za-zÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s+(\d+[,.]\d{2})\s*$/);
+    if(m&&!item){
       const qty=parseFloat(m[1].replace(',','.'));
       const name=m[2].trim();
-      const unitPrice=parseFloat(m[3].replace(',','.'));
-      const lineTotal=parseFloat(m[4].replace(',','.'));
-      if(lineTotal>0&&lineTotal<2000){
-        const unit=guessUnit(name,qty);
-        items.push({name,qty,unit,unitPrice,total:lineTotal,cat:guessCat(name)});
-        continue;
+      const unitPrice=parsePrice(m[3]);
+      const lineTotal=parsePrice(m[4]);
+      if(qty>0&&qty<1000&&lineTotal>0&&lineTotal<5000&&name.length>1){
+        item={name,qty,unit:guessUnit(name,qty),unitPrice,total:lineTotal,cat:guessCat(name)};
       }
     }
 
-    // ── Pattern C (Massen variant): qty glued to name, ONE price only
-    // Some OCR outputs only one price column
-    // e.g.  "1cosynel p-foil bleu 16+2rlx 13,95"
-    m=line.match(/^(\d+[,.]\d+|\d+)([A-Za-zÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s*$/);
-    if(m){
+    // ── STRATEGY B: qty SPACE name TWO prices
+    m=fullLine.match(/^(\d+[,.]\d+|\d+)\s+([A-Za-zÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s+(\d+[,.]\d{2})\s*$/);
+    if(m&&!item){
       const qty=parseFloat(m[1].replace(',','.'));
       const name=m[2].trim();
-      const price=parseFloat(m[3].replace(',','.'));
-      if(price>0&&price<2000&&name.length>1){
-        const unit=guessUnit(name,qty);
-        items.push({name,qty,unit,unitPrice:price,total:qty*price,cat:guessCat(name)});
-        continue;
+      const unitPrice=parsePrice(m[3]);
+      const lineTotal=parsePrice(m[4]);
+      if(qty>0&&qty<1000&&lineTotal>0&&lineTotal<5000&&name.length>1){
+        item={name,qty,unit:guessUnit(name,qty),unitPrice,total:lineTotal,cat:guessCat(name)};
       }
     }
 
-    // ── Pattern D: plain name + single price (fallback for non-weighted items)
-    // e.g.  "carefree triplefresh 56p. 2,99"
-    m=line.match(/^([A-Za-zÀ-ÿ].{2,}?)\s+(\d+[,.]\d{2})\s*$/);
-    if(m){
+    // ── STRATEGY C: qty (glued or spaced) + name + ONE price
+    m=fullLine.match(/^(\d+[,.]?\d*)\s*([A-Za-zÀ-ÿ].+?)\s+(\d+[,.]\d{2})\s*$/);
+    if(m&&!item){
+      const qty=parseFloat(m[1].replace(',','.'));
+      const name=m[2].trim();
+      const price=parsePrice(m[3]);
+      if(qty>0&&qty<1000&&price>0&&price<5000&&name.length>1){
+        item={name,qty,unit:guessUnit(name,qty),unitPrice:price,total:Math.round(qty*price*100)/100,cat:guessCat(name)};
+      }
+    }
+
+    // ── STRATEGY D: pure name + ONE price (no qty prefix)
+    // e.g. "cosynel p-foil bleu 13,95"
+    m=fullLine.match(/^([A-Za-zÀ-ÿ][^0-9]{2,}?)\s+(\d+[,.]\d{2})\s*$/);
+    if(m&&!item){
       const name=m[1].trim();
-      const price=parseFloat(m[2].replace(',','.'));
-      if(price>0&&price<500&&name.length>2){
-        items.push({name,qty:1,unit:'unité',unitPrice:price,total:price,cat:guessCat(name)});
+      const price=parsePrice(m[2]);
+      if(price>0&&price<5000&&name.length>2){
+        item={name,qty:1,unit:'unité',unitPrice:price,total:price,cat:guessCat(name)};
       }
+    }
+
+    // ── STRATEGY E: line has at least one price somewhere — try to extract name + last price
+    if(!item&&PRICE_RX.test(fullLine)){
+      const prices=[...fullLine.matchAll(/(\d+[,.]\d{2})/g)].map(x=>parsePrice(x[1]));
+      const lastPrice=prices[prices.length-1];
+      const nameCandidate=fullLine.replace(/[\d,. €]+$/, '').trim();
+      if(lastPrice>0&&lastPrice<5000&&nameCandidate.length>2&&/[A-Za-zÀ-ÿ]/.test(nameCandidate)){
+        // Extract leading qty if present
+        const qm=nameCandidate.match(/^(\d+[,.]?\d*)\s*(.+)$/);
+        if(qm){
+          const qty=parseFloat(qm[1].replace(',','.'));
+          const name=qm[2].trim();
+          if(qty>0&&qty<1000&&name.length>1){
+            item={name,qty,unit:guessUnit(name,qty),unitPrice:lastPrice,total:lastPrice,cat:guessCat(name)};
+          }
+        } else {
+          item={name:nameCandidate,qty:1,unit:'unité',unitPrice:lastPrice,total:lastPrice,cat:guessCat(nameCandidate)};
+        }
+      }
+    }
+
+    if(item&&item.name.length>1&&item.total>0){
+      // Clean name: remove trailing numbers/specs like "16+2rlx", "56p.", "26st", "1kg"
+      item.name=item.name.replace(/\s+\d+[a-z]+\.?$/i,'').trim();
+      // If name ends with "Xkg" inline, update unit
+      const kgM=item.name.match(/(\d+)\s*kg$/i);
+      if(kgM){item.qty=parseFloat(kgM[1]);item.unit='kg';item.name=item.name.replace(/\d+\s*kg$/i,'').trim();}
+      items.push(item);
     }
   }
 
@@ -1684,6 +1802,66 @@ function parseReceiptText(text){
 }
 
 const ALL_CATS=['fruits-legumes','produits-laitiers','hygiene','menage','cereales','proteines','snacks','autre'];
+function getKnownShops(){
+  const shops=new Set();
+  data.tickets.forEach(t=>{if(t.shop)shops.add(t.shop);});
+  return [...shops].sort();
+}
+
+function toggleShopEdit(){
+  const display=document.getElementById('scan-shop-display');
+  const edit=document.getElementById('scan-shop-edit');
+  const input=document.getElementById('scan-shop-input');
+  const sel=document.getElementById('scan-shop-select');
+  const isEditing=edit.style.display!=='none';
+  if(isEditing){
+    display.style.display='flex';edit.style.display='none';
+  } else {
+    // Populate shop selector with known shops
+    const shops=getKnownShops();
+    const current=document.getElementById('scan-shop-name').textContent;
+    sel.innerHTML='<option value="__new__">+ Nouveau magasin...</option>'+
+      shops.map(s=>`<option value="${s}" ${s===current?'selected':''}>${s}</option>`).join('');
+    // If current shop already known, select it; else show text input
+    if(shops.includes(current)){
+      sel.value=current;
+      input.style.display='none';
+      sel.style.display='';
+    } else {
+      input.value=current;
+      input.style.display='';
+      sel.value='__new__';
+    }
+    display.style.display='none';edit.style.display='flex';
+    sel.focus();
+  }
+}
+
+function onShopSelectChange(val){
+  const input=document.getElementById('scan-shop-input');
+  if(val==='__new__'){
+    input.style.display='';
+    input.focus();
+  } else {
+    input.style.display='none';
+  }
+}
+
+function confirmShopEdit(){
+  const sel=document.getElementById('scan-shop-select');
+  const input=document.getElementById('scan-shop-input');
+  let shopName='';
+  if(sel.value==='__new__'){
+    shopName=input.value.trim();
+  } else {
+    shopName=sel.value;
+  }
+  if(!shopName){showToast('Entrez un nom de magasin');return;}
+  document.getElementById('scan-shop-name').textContent=shopName;
+  if(window._pendingTicket)window._pendingTicket.shop=shopName;
+  toggleShopEdit();
+}
+
 function displayScanResults(ticket){
   document.getElementById('scan-loading').style.display='none';
   document.getElementById('scan-results-card').style.display='block';
@@ -1696,13 +1874,16 @@ function displayScanResults(ticket){
   const el=document.getElementById('scan-items-list');
   el.innerHTML=ticket.items.map((item,i)=>`
     <div class="receipt-item">
-      <span class="ri-name"><input type="text" value="${item.name}" onchange="updatePendingItem(${i},'name',this.value)" style="border:none;background:transparent;width:100%;font-family:'DM Sans',sans-serif;font-size:13px;"></span>
+      <span class="ri-name"><input type="text" value="${item.name.replace(/"/g,'&quot;')}" onchange="updatePendingItem(${i},'name',this.value)" style="border:none;background:transparent;width:100%;font-family:'DM Sans',sans-serif;font-size:13px;"></span>
       <span class="ri-qty"><input type="number" value="${item.qty}" step="any" onchange="updatePendingItem(${i},'qty',parseFloat(this.value))" style="width:55px;border:1px solid var(--border-md);border-radius:4px;padding:2px 4px;font-size:12px;font-family:'DM Sans',sans-serif;"></span>
       <span class="ri-unit"><select onchange="updatePendingItem(${i},'unit',this.value)" style="font-size:11px;border:1px solid var(--border-md);border-radius:4px;padding:2px;background:var(--surface);font-family:'DM Sans',sans-serif;"><option ${item.unit==='kg'?'selected':''}>kg</option><option ${item.unit==='g'?'selected':''}>g</option><option ${item.unit==='l'?'selected':''}>l</option><option ${item.unit==='ml'?'selected':''}>ml</option><option ${item.unit==='unité'?'selected':''}>unité</option></select></span>
       <span class="ri-price"><input type="number" value="${item.unitPrice}" step="0.01" onchange="updatePendingItem(${i},'unitPrice',parseFloat(this.value))" style="width:55px;border:1px solid var(--border-md);border-radius:4px;padding:2px 4px;font-size:12px;font-family:'DM Sans',sans-serif;text-align:right;"></span>
       <span style="width:80px;"><select onchange="updatePendingItem(${i},'cat',this.value)" style="width:100%;font-size:11px;border:1px solid var(--border-md);border-radius:4px;padding:2px;background:var(--surface);font-family:'DM Sans',sans-serif;">${ALL_CATS.map(c=>`<option value="${c}" ${c===item.cat?'selected':''}>${CAT_LABELS[c]||c}</option>`).join('')}</select></span>
       <span onclick="removePendingItem(${i})" style="cursor:pointer;color:var(--text3);font-size:16px;padding:0 3px;">×</span>
     </div>`).join('');
+  if(ticket.items.length===0){
+    el.innerHTML='<div style="padding:12px 17px;color:var(--warn);font-size:13px;">⚠️ Aucun article détecté automatiquement. Vérifiez le texte brut Vision ci-dessus ou ajoutez manuellement.</div>';
+  }
   showPage('courses');
 }
 function updatePendingItem(i,key,val){if(window._pendingTicket&&window._pendingTicket.items[i])window._pendingTicket.items[i][key]=val;}
