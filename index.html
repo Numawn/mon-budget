@@ -328,6 +328,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="nav-section">Outils</div>
     <div class="nav-item" onclick="showPage('articles')"><span class="nav-icon">◈</span> Historique articles</div>
     <div class="nav-item" onclick="showPage('plat')"><span class="nav-icon">◇</span> Calculateur de plat</div>
+    <div class="nav-section">Historique</div>
+    <div class="nav-item" onclick="showPage('historique')"><span class="nav-icon">◷</span> Historique du mois</div>
     <div class="nav-section">Configuration</div>
     <div class="nav-item" onclick="showPage('setup')"><span class="nav-icon">⚙</span> Configuration Google</div>
   </div>
@@ -370,8 +372,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
 
   <div id="alert-banners"></div>
+  <div id="pending-panel-wrap"></div>
 
-  <!-- Global balance hero -->
+  <!-- Quick actions -->
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+    <button class="btn btn-accent" onclick="openPonctualModal()" style="display:flex;align-items:center;gap:6px;">
+      <span style="font-size:15px;">+</span> Rentrée ponctuelle
+    </button>
+    <button class="btn" onclick="openQuickChargePonctuelle()" style="display:flex;align-items:center;gap:6px;background:var(--warn-light);border-color:rgba(184,92,0,0.3);color:var(--warn);">
+      <span style="font-size:15px;">−</span> Charge ponctuelle
+    </button>
+  </div>
   <div class="balance-hero" id="balance-hero">
     <div class="balance-hero-label">Patrimoine total</div>
     <div class="balance-hero-val" id="hero-total">—</div>
@@ -477,7 +488,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
 
   <div class="card">
-    <div class="card-header"><h2>Rentrée ponctuelle ce mois</h2><button class="btn btn-sm btn-accent" onclick="openModal('modal-add-ponctual')">+ Ajouter</button></div>
+    <div class="card-header"><h2>Rentrée ponctuelle ce mois</h2><button class="btn btn-sm btn-accent" onclick="openPonctualModal()">+ Ajouter</button></div>
     <div id="ponctual-list"></div>
   </div>
 </div>
@@ -529,6 +540,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           </div>
           <div class="card-actions">
             <span id="scan-date-label" style="font-size:12px;color:var(--text3);"></span>
+            <button class="btn btn-sm" onclick="cancelScanTicket()" title="Annuler ce ticket" style="color:var(--danger);border-color:rgba(192,57,43,0.3);">✕ Annuler</button>
             <button class="btn btn-sm btn-accent" onclick="saveTicket()">✓ Enregistrer</button>
           </div>
         </div>
@@ -660,6 +672,51 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ══ HISTORIQUE ══ -->
+<div class="page" id="page-historique">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Historique du mois</div>
+      <div class="page-sub" id="hist-sub">Toutes les entrées et sorties</div>
+    </div>
+    <div class="month-nav">
+      <button onclick="changeHistMonth(-1)">‹</button>
+      <span class="cur-month" id="hist-month-label">—</span>
+      <button onclick="changeHistMonth(1)">›</button>
+    </div>
+  </div>
+
+  <!-- Futures transactions (pas encore arrivées) -->
+  <div id="hist-future-wrap" style="margin-bottom:14px;">
+    <div id="hist-future-toggle" onclick="toggleFutureSection()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:9px 14px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border);user-select:none;">
+      <span style="font-size:13px;font-weight:500;color:var(--text3);">⏳ <span id="hist-future-count">0</span> transaction(s) prévues mais pas encore arrivées</span>
+      <span id="hist-future-arrow" style="color:var(--text3);font-size:12px;">›</span>
+    </div>
+    <div id="hist-future-list" style="display:none;margin-top:6px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;opacity:0.75;"></div>
+  </div>
+
+  <!-- Récapitulatif -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;margin-bottom:18px;">
+    <div class="metric-card good">
+      <div class="metric-label">Rentrées</div>
+      <div class="metric-val" id="hist-m-income">—</div>
+    </div>
+    <div class="metric-card danger-card">
+      <div class="metric-label">Sorties</div>
+      <div class="metric-val" id="hist-m-expense">—</div>
+    </div>
+    <div class="metric-card" id="hist-m-balance-card">
+      <div class="metric-label">Solde du mois</div>
+      <div class="metric-val" id="hist-m-balance">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Toutes les transactions</h2></div>
+    <div id="hist-transactions-list"></div>
   </div>
 </div>
 
@@ -890,11 +947,35 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <div class="form-field form-full"><label>Description</label><input type="text" id="ponc-name" placeholder="ex: Vente jeu vidéo, remboursement..."></div>
         <div class="form-field"><label>Montant (€)</label><input type="number" id="ponc-amount" step="0.01"></div>
         <div class="form-field"><label>Date</label><input type="date" id="ponc-date"></div>
+        <div class="form-field form-full"><label>Compte crédité</label>
+          <select id="ponc-account-id"><option value="">— Aucun (sans impact compte) —</option></select>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('modal-add-ponctual')">Annuler</button>
       <button class="btn btn-accent" onclick="addPonctual()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHARGE PONCTUELLE -->
+<div class="modal-overlay" id="modal-add-charge-ponctuelle">
+  <div class="modal">
+    <div class="modal-header"><h2>Charge ponctuelle</h2><button class="modal-close" onclick="closeModal('modal-add-charge-ponctuelle')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-field form-full"><label>Description</label><input type="text" id="cpnc-name" placeholder="ex: Plein d'essence, réparation..."></div>
+        <div class="form-field"><label>Montant (€)</label><input type="number" id="cpnc-amount" step="0.01"></div>
+        <div class="form-field"><label>Date</label><input type="date" id="cpnc-date"></div>
+        <div class="form-field form-full"><label>Compte débité</label>
+          <select id="cpnc-account-id"><option value="">— Aucun (sans impact compte) —</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-add-charge-ponctuelle')">Annuler</button>
+      <button class="btn" style="background:var(--warn-light);border-color:rgba(184,92,0,0.3);color:var(--warn);" onclick="addChargePonctuelle()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -1148,6 +1229,7 @@ const DEFAULT_DATA = {
   googleClientId: '',
   googleVisionKey: '',
   pendingTransactions:[],
+  chargesPonctuelles:[],
   lastOpenedAt:null,
   dismissedDuplicates:[],
 };
@@ -1181,7 +1263,7 @@ function showPage(id){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+id+"'"))n.classList.add('active');});
-  const renders={dashboard:renderDashboard,comptes:renderComptes,charges:renderCharges,courses:renderCourses,articles:renderArticles,plat:renderPlat,setup:renderSetup};
+  const renders={dashboard:renderDashboard,comptes:renderComptes,charges:renderCharges,courses:renderCourses,articles:renderArticles,plat:renderPlat,setup:renderSetup,historique:renderHistorique};
   if(renders[id])renders[id]();
 }
 
@@ -1265,8 +1347,10 @@ function renderDashboard(){
   const incomeTotal=totalIncomeMonthly();
   const ponctuals=getMonthPonctuals(m,y);
   const ponctualTotal=ponctuals.reduce((s,p)=>s+(p.amount||0),0);
+  const chargesPonc=getMonthChargesPonctuelles(m,y);
+  const chargesPoncTotal=chargesPonc.reduce((s,p)=>s+(p.amount||0),0);
   const allIncome=incomeTotal+ponctualTotal;
-  const allExpenses=charges+coursesTotal;
+  const allExpenses=charges+coursesTotal+chargesPoncTotal;
   const monthBalance=allIncome-allExpenses;
   const mIds=mainGroupIds();
   const assets=totalAssets(mIds.length?mIds:null);
@@ -1445,12 +1529,50 @@ function addPonctual(){
   const name=document.getElementById('ponc-name').value.trim();
   const amount=parseFloat(document.getElementById('ponc-amount').value)||0;
   const date=document.getElementById('ponc-date').value||new Date().toISOString().split('T')[0];
+  const accountId=document.getElementById('ponc-account-id')?.value||'';
   if(!name){showToast('Donnez une description');return;}
   if(!data.ponctuals)data.ponctuals=[];
-  data.ponctuals.push({id:uid(),name,amount,date});
-  closeModal('modal-add-ponctual');renderIncomes();saveData();showToast('Rentrée ponctuelle ajoutée ✓');
+  data.ponctuals.push({id:uid(),name,amount,date,accountId:accountId||null});
+  // Credit the account if selected
+  if(accountId){
+    const acc=data.accounts.find(a=>a.id===accountId);
+    if(acc){acc.balance+=amount;acc.updatedAt=new Date().toISOString();}
+  }
+  closeModal('modal-add-ponctual');renderIncomes();renderDashboard();saveData();showToast('Rentrée ponctuelle ajoutée ✓');
 }
 function deletePonctual(id){data.ponctuals=(data.ponctuals||[]).filter(p=>p.id!==id);renderIncomes();saveData();}
+
+function openPonctualModal(){
+  populateAccountSel('ponc-account-id','');
+  document.getElementById('ponc-name').value='';
+  document.getElementById('ponc-amount').value='';
+  document.getElementById('ponc-date').value=new Date().toISOString().split('T')[0];
+  openModal('modal-add-ponctual');
+}
+function openQuickChargePonctuelle(){
+  populateAccountSel('cpnc-account-id','');
+  document.getElementById('cpnc-name').value='';
+  document.getElementById('cpnc-amount').value='';
+  document.getElementById('cpnc-date').value=new Date().toISOString().split('T')[0];
+  openModal('modal-add-charge-ponctuelle');
+}
+function addChargePonctuelle(){
+  const name=document.getElementById('cpnc-name').value.trim();
+  const amount=parseFloat(document.getElementById('cpnc-amount').value)||0;
+  const date=document.getElementById('cpnc-date').value||new Date().toISOString().split('T')[0];
+  const accountId=document.getElementById('cpnc-account-id')?.value||'';
+  if(!name){showToast('Donnez une description');return;}
+  if(!data.chargesPonctuelles)data.chargesPonctuelles=[];
+  data.chargesPonctuelles.push({id:uid(),name,amount,date,accountId:accountId||null});
+  // Debit the account if selected
+  if(accountId){
+    const acc=data.accounts.find(a=>a.id===accountId);
+    if(acc){acc.balance-=amount;acc.updatedAt=new Date().toISOString();}
+  }
+  closeModal('modal-add-charge-ponctuelle');renderDashboard();saveData();showToast('Charge ponctuelle enregistrée ✓');
+}
+function deleteChargePonctuelle(id){data.chargesPonctuelles=(data.chargesPonctuelles||[]).filter(p=>p.id!==id);renderDashboard();saveData();}
+function getMonthChargesPonctuelles(m,y){return(data.chargesPonctuelles||[]).filter(p=>{const d=new Date(p.date);return d.getMonth()===m&&d.getFullYear()===y;});}
 
 // ════════════════════════════════════════════
 // CHARGES
@@ -1502,10 +1624,11 @@ function renderCourses(){
   const el=document.getElementById('tickets-history');
   const sorted=[...data.tickets].sort((a,b)=>new Date(b.date)-new Date(a.date));
   el.innerHTML=sorted.length===0?'<div style="padding:18px;text-align:center;color:var(--text3);font-size:13px;">Scannez votre premier ticket !</div>':
-    sorted.map(t=>`<div style="padding:11px 17px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="toggleTicket('td-${t.id}')">
-      <div style="display:flex;align-items:center;gap:9px;">
+    sorted.map(t=>`<div style="padding:11px 17px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:9px;cursor:pointer;" onclick="toggleTicket('td-${t.id}')">
         <div style="flex:1;"><div style="font-weight:500;font-size:14px;">${t.shop}</div><div style="font-size:11px;color:var(--text3);">${new Date(t.date).toLocaleDateString('fr-BE')} · ${t.items.length} articles</div></div>
         <div style="font-weight:500;">${fmt(t.total)}</div>
+        <button onclick="deleteTicket('${t.id}');event.stopPropagation();" title="Supprimer ce ticket" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:2px 5px;border-radius:4px;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">🗑</button>
         <span style="color:var(--text3);font-size:12px;">›</span>
       </div>
       <div id="td-${t.id}" style="display:none;margin-top:9px;">
@@ -2089,6 +2212,17 @@ function saveTicket(){
   window._pendingTicket=null;
   renderCourses();saveData();showToast('Ticket enregistré ✓ · Articles ajoutés à l\'historique');
 }
+function cancelScanTicket(){
+  window._pendingTicket=null;
+  document.getElementById('scan-results-card').style.display='none';
+  document.getElementById('scan-debug-wrap').style.display='none';
+  showToast('Ticket annulé');
+}
+function deleteTicket(id){
+  if(!confirm('Supprimer ce ticket ?'))return;
+  data.tickets=data.tickets.filter(t=>t.id!==id);
+  renderCourses();renderDashboard();saveData();showToast('Ticket supprimé ✓');
+}
 function addTicketArticlesToHistory(ticket){
   ticket.items.forEach(item=>{
     if(item.unit==='kg'||item.unit==='g'||item.unit==='l'||item.unit==='ml'){
@@ -2349,7 +2483,7 @@ function init(){
       ['accounts','incomes','ponctuals','charges','tickets','articles','dishes',
        'currentDishIngredients','accountGroups','pendingTransactions','dismissedDuplicates',
        'googleClientId','googleVisionKey','currentMonth','currentYear',
-       'lastOpenedAt','articleFilter'].forEach(k=>{if(parsed[k]!==undefined)data[k]=parsed[k];});
+       'lastOpenedAt','articleFilter','chargesPonctuelles'].forEach(k=>{if(parsed[k]!==undefined)data[k]=parsed[k];});
       // Ensure accountGroups exists
       if(!data.accountGroups||!data.accountGroups.length){
         data.accountGroups=[
@@ -2779,8 +2913,147 @@ function addTicketToHistory(ticket){
 }
 
 // ════════════════════════════════════════════
-// DUPLICATE ARTICLE DETECTION
+// HISTORIQUE DU MOIS
 // ════════════════════════════════════════════
+let _histMonth=new Date().getMonth();
+let _histYear=new Date().getFullYear();
+
+function changeHistMonth(d){
+  _histMonth+=d;
+  if(_histMonth>11){_histMonth=0;_histYear++;}
+  if(_histMonth<0){_histMonth=11;_histYear--;}
+  renderHistorique();
+}
+function toggleFutureSection(){
+  const list=document.getElementById('hist-future-list');
+  const arrow=document.getElementById('hist-future-arrow');
+  const open=list.style.display!=='none';
+  list.style.display=open?'none':'block';
+  arrow.textContent=open?'›':'∨';
+}
+
+function renderHistorique(){
+  const m=_histMonth,y=_histYear;
+  document.getElementById('hist-month-label').textContent=MONTHS[m]+' '+y;
+  document.getElementById('hist-sub').textContent='Toutes les entrées et sorties · '+MONTHS[m]+' '+y;
+
+  const now=new Date();
+  const monthStart=new Date(y,m,1);
+  const monthEnd=new Date(y,m+1,0,23,59,59);
+  const isCurrentMonth=(now.getMonth()===m&&now.getFullYear()===y);
+
+  // ── Collect all transactions ─────────────────────────────────
+  const done=[];   // transactions passées (ou mois passé complet)
+  const future=[]; // transactions prévues mais pas encore arrivées (si mois courant)
+
+  // Helper: is a date in the past (relative to today) in current month?
+  function isPast(dateStr){
+    const d=new Date(dateStr);
+    return !isCurrentMonth||d<=now;
+  }
+
+  // 1. Rentrées régulières (incomes) — prorated for the month
+  data.incomes.forEach(inc=>{
+    if(inc.freq!=='mensuel'&&inc.freq!=='hebdo'&&inc.freq!=='trimestriel'&&inc.freq!=='annuel')return;
+    // Check if this income falls in this month
+    let relevant=false;
+    if(inc.freq==='mensuel')relevant=true;
+    else if(inc.freq==='hebdo')relevant=true;
+    else if(inc.freq==='trimestriel'){const qm=Math.floor(m/3)*3;relevant=(m===qm||m===qm+1||m===qm+2);}
+    else if(inc.freq==='annuel')relevant=true; // show prorated
+    if(!relevant)return;
+    const dateStr=inc.day?`${y}-${String(m+1).padStart(2,'0')}-${String(Math.min(inc.day,28)).padStart(2,'0')}`:`${y}-${String(m+1).padStart(2,'0')}-01`;
+    const past=isPast(dateStr);
+    const amount=incomeMonthly(inc);
+    const acc=data.accounts.find(a=>a.id===inc.accountId);
+    const tx={type:'income',label:inc.name+(inc.freq!=='mensuel'?' ('+FREQ_LABEL[inc.freq]+' proraté)':''),amount,date:dateStr,sub:acc?'→ '+acc.name:'',icon:'💚',color:'var(--accent)'};
+    if(past)done.push(tx); else future.push(tx);
+  });
+
+  // 2. Rentrées ponctuelles
+  const poncs=getMonthPonctuals(m,y);
+  poncs.forEach(p=>{
+    const acc=data.accounts.find(a=>a.id===p.accountId);
+    done.push({type:'income-ponc',label:p.name,amount:p.amount,date:p.date,sub:acc?'→ '+acc.name:'Rentrée ponctuelle',icon:'💶',color:'var(--info)',id:p.id});
+  });
+
+  // 3. Charges fixes (pour ce mois)
+  data.charges.forEach(c=>{
+    let relevant=false;
+    if(c.freq==='mensuel')relevant=true;
+    else if(c.freq==='annuel'&&c.month&&(c.month-1)===m)relevant=true;
+    else if(c.freq==='trimestriel'){const qm=Math.floor(m/3)*3;const qMonth=(qm+3)%12;relevant=(m===qMonth);}
+    if(!relevant)return;
+    const dateStr=c.day?`${y}-${String(m+1).padStart(2,'0')}-${String(Math.min(c.day,28)).padStart(2,'0')}`:`${y}-${String(m+1).padStart(2,'0')}-01`;
+    const past=isPast(dateStr);
+    const acc=data.accounts.find(a=>a.id===c.accountId);
+    const tx={type:'charge',label:c.name,amount:c.amount,date:dateStr,sub:(acc?acc.name+' · ':'')+CAT_LABELS[c.cat],icon:'💸',color:'var(--danger)'};
+    if(past)done.push(tx); else future.push(tx);
+  });
+
+  // 4. Tickets de courses
+  const tickets=getMonthTickets(m,y);
+  tickets.forEach(t=>{
+    done.push({type:'ticket',label:t.shop,amount:t.total,date:t.date,sub:t.items.length+' article'+(t.items.length>1?'s':''),icon:'🛒',color:'var(--warn)',id:t.id});
+  });
+
+  // 5. Charges ponctuelles
+  const chargesPonc=getMonthChargesPonctuelles(m,y);
+  chargesPonc.forEach(p=>{
+    const acc=data.accounts.find(a=>a.id===p.accountId);
+    done.push({type:'charge-ponc',label:p.name,amount:p.amount,date:p.date,sub:acc?'← '+acc.name:'Charge ponctuelle',icon:'⛽',color:'var(--warn)',id:p.id});
+  });
+
+  // Sort by date desc
+  done.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  future.sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  // ── Summary ──────────────────────────────────────────────────
+  const totalIncome=done.filter(t=>t.type==='income'||t.type==='income-ponc').reduce((s,t)=>s+t.amount,0);
+  const totalExpense=done.filter(t=>t.type!=='income'&&t.type!=='income-ponc').reduce((s,t)=>s+t.amount,0);
+  const balance=totalIncome-totalExpense;
+  document.getElementById('hist-m-income').textContent=fmt(totalIncome);
+  document.getElementById('hist-m-expense').textContent=fmt(totalExpense);
+  document.getElementById('hist-m-balance').textContent=(balance>=0?'+':'')+fmt(balance);
+  const bCard=document.getElementById('hist-m-balance-card');
+  bCard.className='metric-card'+(balance<0?' danger-card':balance>0?' good':'');
+
+  // ── Future section ───────────────────────────────────────────
+  document.getElementById('hist-future-count').textContent=future.length;
+  document.getElementById('hist-future-wrap').style.display=future.length>0?'block':'none';
+  document.getElementById('hist-future-list').innerHTML=future.map(tx=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;background:var(--surface2);">
+      <span style="font-size:16px;">${tx.icon}</span>
+      <div style="flex:1;">
+        <div style="font-weight:500;color:var(--text2);">${tx.label}</div>
+        <div style="font-size:11px;color:var(--text3);">${formatDate(tx.date)}${tx.sub?' · '+tx.sub:''}</div>
+      </div>
+      <div style="font-weight:500;color:${tx.type==='income'||tx.type==='income-ponc'?'var(--accent)':'var(--danger)'};">${tx.type==='income'||tx.type==='income-ponc'?'+':'−'}${fmt(tx.amount)}</div>
+    </div>`).join('');
+
+  // ── Main transaction list ─────────────────────────────────────
+  const listEl=document.getElementById('hist-transactions-list');
+  if(done.length===0){
+    listEl.innerHTML='<div style="padding:18px;text-align:center;color:var(--text3);font-size:13px;">Aucune transaction ce mois.</div>';
+    return;
+  }
+  listEl.innerHTML=done.map(tx=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 17px;border-bottom:1px solid var(--border);font-size:13px;">
+      <div style="width:32px;height:32px;border-radius:50%;background:${tx.type==='income'||tx.type==='income-ponc'?'var(--accent-light)':'var(--warn-light)'};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">${tx.icon}</div>
+      <div style="flex:1;">
+        <div style="font-weight:500;">${tx.label}</div>
+        <div style="font-size:11px;color:var(--text3);">${formatDate(tx.date)}${tx.sub?' · '+tx.sub:''}</div>
+      </div>
+      <div style="font-weight:500;font-size:15px;color:${tx.type==='income'||tx.type==='income-ponc'?'var(--accent)':'var(--danger)'};">${tx.type==='income'||tx.type==='income-ponc'?'+':'−'}${fmt(tx.amount)}</div>
+      ${tx.type==='income-ponc'?`<button onclick="deletePonctual('${tx.id}');renderHistorique();" title="Supprimer" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 4px;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">🗑</button>`:''}
+      ${tx.type==='charge-ponc'?`<button onclick="deleteChargePonctuelle('${tx.id}');renderHistorique();" title="Supprimer" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 4px;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">🗑</button>`:''}
+      ${tx.type==='ticket'?`<button onclick="deleteTicket('${tx.id}');renderHistorique();" title="Supprimer" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 4px;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'">🗑</button>`:''}
+    </div>`).join('');
+}
+
+function formatDate(dateStr){
+  try{return new Date(dateStr).toLocaleDateString('fr-BE');}catch(e){return dateStr;}
+}
 function strSimilarity(a,b){
   a=a.toLowerCase().trim();b=b.toLowerCase().trim();
   if(a===b)return 1;
